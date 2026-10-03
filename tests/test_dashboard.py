@@ -231,3 +231,20 @@ def test_langchain_retriever_adapter():
     from codewarden.rag.lc import as_langchain_retriever
     docs = as_langchain_retriever(build_retriever(ROOT / "demo/shop", RagConfig()), k=2).invoke("run_query sanctioned database")
     assert len(docs) == 2 and docs[0].metadata["path"] == "app/db.py"
+
+
+def test_failed_model_calls_are_errors_not_empty_reviews(engine, monkeypatch):
+    from codewarden.llm.base import LLMError
+
+    class Quota:
+        def complete(self, s, u):
+            raise LLMError("HTTP 429: You exceeded your current quota", 429)
+
+    monkeypatch.setattr(engine, "llm", lambda cfg: Quota())
+    c = TestClient(create_app(engine, allowed_hosts={"testserver"}))
+    r = c.post("/api/reviews", json={"source": "sample", "sample": "off_by_one", "provider": "rules"})
+    assert r.status_code == 400 and "quota" in r.json()["error"]
+    assert c.get("/api/stats").json()["reviews"] == 0
+    r = c.post("/api/eval", json={"provider": "rules"})
+    assert r.status_code == 400 and "not recorded" in r.json()["error"]
+    assert c.get("/api/eval").json() == []

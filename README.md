@@ -45,7 +45,7 @@ A step-by-step presentation script is in [docs/DEMO.md](docs/DEMO.md).
 
 | Provider | Setup | Notes |
 |---|---|---|
-| `gemini` | `export GEMINI_API_KEY=...` | Default `gemini-2.5-flash`. Plain REST, no SDK. |
+| `gemini` | `export GEMINI_API_KEY=...` | Default `gemini-flash-latest`. Plain REST, no SDK. |
 | `ollama` | `ollama pull qwen2.5-coder:7b`, then `--provider ollama` | Local and private. Try `deepseek-coder`, `codellama`, `starcoder2` via `--model`. |
 | `rules` | none | Deterministic regex baseline. **Not an AI model.** For tests, demos and as an evaluation control. |
 

@@ -64,3 +64,32 @@ def test_provider_factory():
     cfg.provider = "nope"
     with pytest.raises(LLMError):
         get_llm(cfg)
+
+
+def test_gemini_falls_back_when_a_model_is_busy_retired_or_empty(monkeypatch):
+    tried = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        model = url.split("/models/")[1].split(":")[0]
+        tried.append(model)
+        if model == "a":
+            return MagicMock(status_code=503, text="busy", json=lambda: {})
+        if model == "b":
+            return MagicMock(status_code=404, text="retired", json=lambda: {})
+        if model == "c":
+            return _ok({"candidates": [{"finishReason": "OTHER"}]})
+        return _ok({"candidates": [{"content": {"parts": [{"text": "fine"}]}}]})
+
+    monkeypatch.setattr("codewarden.llm.base.requests.post", fake_post)
+    monkeypatch.setattr("codewarden.llm.base.time.sleep", lambda s: None)
+    out = GeminiLLM("a", api_key="k", fallbacks=("b", "c", "d")).complete("s", "u")
+    assert out == "fine" and [m for i, m in enumerate(tried) if i == 0 or tried[i - 1] != m] == ["a", "b", "c", "d"]
+
+
+def test_gemini_does_not_fall_back_on_auth_errors(monkeypatch):
+    calls = []
+    monkeypatch.setattr("codewarden.llm.base.requests.post",
+                        lambda url, **k: calls.append(1) or MagicMock(status_code=403, text="bad key"))
+    with pytest.raises(LLMError):
+        GeminiLLM("a", api_key="k", fallbacks=("b",)).complete("s", "u")
+    assert len(calls) == 1

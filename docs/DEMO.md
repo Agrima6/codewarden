@@ -57,4 +57,5 @@ Not built: Sweep.dev, CodiumAI/Codeium and Sourcegraph integrations. If asked: t
 - *Port in use*: `codewarden demo --port 9000`
 - *"demo/ folder not found"*: run from the repository root.
 - *Gemini shows "unavailable"*: the key must be exported before the server starts.
+- *"quota exceeded" (HTTP 429)*: the key's free-tier limit is used up. It resets on Google's schedule, or use another key. A failed run is reported as an error and never saved as a result. Do your Gemini runs sparingly (a review is 1-3 calls, a full evaluation about 12) and rehearse the offline path first.
 - *Blank page*: hard-refresh; check the terminal for tracebacks.

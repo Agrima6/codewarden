@@ -22,6 +22,7 @@ class CaseScore:
     categories_ok: int
     expected_desc: str = ""
     found_desc: str = ""
+    error: str = ""
 
 
 def score_case(findings: list[Finding], expected: list[dict]) -> tuple[int, int, int]:
@@ -48,7 +49,8 @@ def run_eval(cases_dir: Path, cfg: Config, llm: LLM) -> list[CaseScore]:
         m, tp, cat = score_case(res.findings, expected)
         exp_desc = "; ".join(f"{e['path']}:{e['lines'][0]} ({e.get('category', '?')})" for e in expected) or "no issues"
         found_desc = "; ".join(f"{f.path}:{f.line} {f.title}" for f in res.findings) or "no findings"
-        scores.append(CaseScore(diff_path.stem, len(expected), m, len(res.findings), tp, cat, exp_desc, found_desc))
+        scores.append(CaseScore(diff_path.stem, len(expected), m, len(res.findings), tp, cat, exp_desc, found_desc,
+                                  res.errors[0] if res.errors else ""))
     return scores
 
 

@@ -7,11 +7,25 @@ import requests
 
 
 class LLMError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 class LLM(Protocol):
     def complete(self, system: str, user: str) -> str: ...
+
+
+def _api_message(resp) -> str:
+    """The provider's own error message if it sent JSON, else a short slice of the body."""
+    try:
+        err = resp.json().get("error", {})
+        msg = err.get("message") if isinstance(err, dict) else None
+        if msg:
+            return msg.split(". For more information")[0][:200]
+    except (ValueError, AttributeError, TypeError):
+        pass
+    return str(resp.text)[:200]
 
 
 def post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 120,
@@ -29,9 +43,9 @@ def post_json(url: str, payload: dict, headers: dict | None = None, timeout: int
                     return resp.json()
                 except ValueError as exc:
                     raise LLMError("provider returned non-JSON response") from exc
-            last = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            last = f"HTTP {resp.status_code}: {_api_message(resp)}"
             if resp.status_code not in (408, 429, 500, 502, 503, 504):
-                raise LLMError(last)
+                raise LLMError(last, resp.status_code)
         if attempt < retries:
             time.sleep(backoff * (2 ** attempt))
-    raise LLMError(f"giving up after {retries + 1} attempts ({last})")
+    raise LLMError(f"giving up after {retries + 1} attempts ({last})", status=503)

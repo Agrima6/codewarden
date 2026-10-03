@@ -1,7 +1,7 @@
 # CodeWarden configuration. Every key is optional; these are the defaults you are most likely to change.
 
 provider: gemini          # gemini | ollama | rules (offline, rule-based baseline)
-model: ""                 # empty = provider default (gemini-2.5-flash / qwen2.5-coder:7b)
+model: ""                 # empty = provider default (gemini-flash-latest / qwen2.5-coder:7b)
 
 min_severity: low         # drop findings below this level: low | medium | high | critical
 min_confidence: 0.5       # drop findings the model is unsure about (0-1)

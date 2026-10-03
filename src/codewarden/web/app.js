@@ -78,7 +78,7 @@ function ago(ts) {
 const fmtMs = (ms) => (ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + ' s');
 const pct = (x) => (x == null ? 'n/a' : Math.round(x * 100) + '%');
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const SOURCE_LABEL = { diff: 'Pasted diff', pr: 'GitHub PR', sample: 'Sample', demo: 'Demo', webhook: 'Webhook' };
+const SOURCE_LABEL = { diff: 'Pasted diff', pr: 'GitHub PR', sample: 'Sample', demo: 'Sample PR', webhook: 'Webhook' };
 async function copy(text) {
   try { await navigator.clipboard.writeText(text); toast('Copied'); }
   catch (_) { toast('Copy failed. Select the text and copy manually.', true); }
@@ -139,13 +139,13 @@ function providerPicker(initial) {
 async function pageOverview() {
   const [stats, reviews] = await Promise.all([api('/api/stats'), api('/api/reviews?limit=15')]);
   const view = h('div', {});
-  const seed = h('button', { class: 'btn' }, 'Load demo data');
-  seed.addEventListener('click', busy(seed, async () => { await api('/api/demo/seed', { method: 'POST' }); toast('Demo reviews loaded'); render(); }));
+  const seed = h('button', { class: 'btn' }, 'Load sample pull requests');
+  seed.addEventListener('click', busy(seed, async () => { await api('/api/demo/seed', { method: 'POST' }); toast('Sample reviews loaded'); render(); }));
   view.append(h('div', { class: 'page-head' },
     h('div', {}, h('h1', {}, 'Overview'), h('p', { class: 'sub' }, 'What CodeWarden has reviewed and found across your pull requests.')),
     h('div', { class: 'row' }, h('a', { class: 'btn primary', href: '#/new' }, icon('plus'), 'New review'))));
   if (!stats.reviews) {
-    view.append(emptyState('No reviews yet', 'Review a diff or a GitHub pull request to see findings here. Want to explore first? Load the bundled demo pull requests, which run offline.',
+    view.append(emptyState('No reviews yet', 'Review a diff or a GitHub pull request to see findings here. Want to explore first? Load the bundled sample pull requests to explore.',
       h('a', { class: 'btn primary', href: '#/new' }, 'Start a review'), seed));
     return view;
   }
@@ -192,7 +192,7 @@ async function pageNew() {
     pr: h('div', { class: 'field' }, h('label', { for: 'pr' }, 'Pull request URL'), url,
       h('div', { class: 'hint' }, 'Public repositories work as is. Private ones need GITHUB_TOKEN on the server.')),
     sample: h('div', { class: 'field' }, h('label', { for: 'sample' }, 'Bundled sample'), sample,
-      h('div', { class: 'hint' }, samples.length ? 'Demo pull requests and the seeded-bug cases used for evaluation.' : 'No samples found. Run from the repository root.')) };
+      h('div', { class: 'hint' }, samples.length ? 'Sample pull requests and the seeded-bug cases used for evaluation.' : 'No samples found. Run from the repository root.')) };
   const body = h('div', {});
   const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Diff source' });
   const setMode = (m) => {
@@ -406,7 +406,7 @@ async function pageSettings() {
           h('div', {}, h('span', {}, 'GITHUB_WEBHOOK_SECRET'), h('span', { class: 'badge ' + (config.webhook ? 'ok' : '') }, config.webhook ? 'set' : 'not set')))),
       h('div', { class: 'card card-pad' }, h('h2', {}, 'Server'),
         h('div', { class: 'list' }, row('Version', health.version), row('Access token required', health.auth_required),
-          h('div', {}, h('span', {}, 'Demo data'), h('button', { class: 'btn small danger', onclick: async () => { await api('/api/demo', { method: 'DELETE' }); toast('Demo reviews removed'); } }, 'Remove demo reviews'))))));
+          h('div', {}, h('span', {}, 'Sample data'), h('button', { class: 'btn small danger', onclick: async () => { await api('/api/demo', { method: 'DELETE' }); toast('Sample reviews removed'); } }, 'Remove sample reviews'))))));
 }
 
 /* ---------- router ---------- */

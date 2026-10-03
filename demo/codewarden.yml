@@ -1,0 +1,6 @@
+# Used by `codewarden demo`: semantic retrieval (ChromaDB embeddings) over language-aware chunks (LangChain).
+rag:
+  enabled: true
+  backend: chroma
+  chunker: langchain
+  top_k: 4

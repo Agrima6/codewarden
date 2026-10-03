@@ -77,6 +77,7 @@ class Engine:
         key = (cfg.rag.backend, cfg.rag.chunker, cfg.rag.chunk_lines, cfg.rag.extensions.__len__())
         with self._lock:
             if self._retriever_key != key or self._retriever is None or time.time() - self._built_at > 120:
+                getattr(self._retriever, "close", lambda: None)()
                 self._retriever = build_retriever(self.repo_root, cfg.rag)
                 self._retriever_key, self._built_at = key, time.time()
             return self._retriever
@@ -92,7 +93,7 @@ class Engine:
         out = [{"id": "rules", "label": "Rule-based baseline", "available": True, "models": [],
                 "detail": "Offline, deterministic, no model"}]
         has_key = bool(os.environ.get("GEMINI_API_KEY"))
-        out.append({"id": "gemini", "label": "Google Gemini", "available": has_key, "models": ["gemini-2.5-flash"],
+        out.append({"id": "gemini", "label": "Google Gemini", "available": has_key, "models": ["gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-pro"],
                     "detail": "API key found" if has_key else "Set GEMINI_API_KEY and restart the server"})
         host = (os.environ.get("OLLAMA_HOST") or "http://localhost:11434").rstrip("/")
         try:
@@ -116,6 +117,8 @@ class Engine:
         cfg = self.config(provider, model, rag)
         llm = self.llm(cfg)
         result = review_diff(diff, cfg, llm, self.retriever(cfg), title, pr_body, seen)
+        if result.requests and len(result.errors) >= result.requests:
+            raise UserError(f"The {cfg.provider} request failed, so no review was produced. {result.errors[0]}")
         rid = self.store.add_review(source=source, title=title, provider=cfg.provider, model=cfg.resolved_model(),
                                     rag=cfg.rag.enabled, diff_text=diff, result=result, repo=repo,
                                     pr_number=pr_number, head_sha=head_sha)
@@ -202,7 +205,7 @@ class Engine:
                 "results": [{"path": c.path, "start": c.start, "end": c.end, "text": c.text} for c in hits]}
 
     def _sample_dirs(self):
-        return [("Demo pull requests", self.demo_dir), ("Seeded bug cases", self.eval_dir)]
+        return [("Sample pull requests", self.demo_dir), ("Seeded bug cases", self.eval_dir)]
 
     def samples(self) -> list[dict]:
         out = []
@@ -233,7 +236,7 @@ class Engine:
             count += 1
         if self.eval_dir and self.eval_dir.exists() and not self.store.list_evals(1):
             self.run_eval("rules", None)
-        return {"reviews": count}
+        return {"reviews": count, "warnings": []}
 
     def clear_demo(self) -> None:
         self.store.clear_reviews("demo")
@@ -243,6 +246,9 @@ class Engine:
             raise UserError("No evaluation cases are configured on this server (pass --eval-dir).")
         cfg = self.config(provider, model, False)
         scores = run_eval(self.eval_dir, cfg, self.llm(cfg))
+        failed = [s.error for s in scores if s.error]
+        if failed:
+            raise UserError(f"Evaluation not recorded: {len(failed)} of {len(scores)} cases failed. {failed[0]}")
         t = summarize(scores)
         cases = [s.__dict__ for s in scores]
         eid = self.store.add_eval(cfg.provider, cfg.resolved_model(), t["precision"], t["recall"],

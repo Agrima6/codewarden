@@ -182,7 +182,17 @@ def _serve(args, *, repo_root: Path, db: Path, seed: bool) -> int:
         return 2
     engine = Engine(Store(db), repo_root, args.config, _find_dir(args.eval_dir), _find_dir(args.demo_dir))
     if seed:
-        engine.seed_demo()
+        import threading
+
+        def _seed():
+            print("Preparing sample reviews...", flush=True)
+            try:
+                for w in engine.seed_demo().get("warnings", []):
+                    print(f"  note: {w}", flush=True)
+                print("Sample reviews ready.", flush=True)
+            except Exception as exc:  # keep the server up even if seeding fails
+                print(f"  seeding failed: {exc}", flush=True)
+        threading.Thread(target=_seed, daemon=True).start()
     url = f"http://{args.host}:{args.port}"
     print(f"CodeWarden dashboard: {url}   (repo: {engine.repo_root}, db: {db})")
     if args.open:
@@ -204,6 +214,9 @@ def cmd_demo(args) -> int:
         return 2
     db = Path(args.db)
     db.unlink(missing_ok=True)
+    demo_cfg = _find_dir("demo")
+    if not args.config and demo_cfg and (demo_cfg / "codewarden.yml").exists():
+        args.config = str(demo_cfg / "codewarden.yml")
     return _serve(args, repo_root=shop, db=db, seed=True)
 
 
