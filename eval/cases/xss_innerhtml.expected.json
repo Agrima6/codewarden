@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "web/comments.js",
+      "lines": [
+        3
+      ],
+      "category": "security"
+    }
+  ]
+}

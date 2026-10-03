@@ -1,0 +1,17 @@
+diff --git a/utils/stats.py b/utils/stats.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/utils/stats.py
+@@ -0,0 +1,11 @@
++def moving_average(values, window):
++    result = []
++    for i in range(len(values) + 1):
++        chunk = values[i:i + window]
++        if len(chunk) == window:
++            result.append(sum(chunk) / window)
++    return result
++
++
++def total(values):
++    return sum(values)

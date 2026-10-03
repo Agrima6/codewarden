@@ -1,0 +1,18 @@
+diff --git a/models/money.py b/models/money.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/models/money.py
+@@ -0,0 +1,12 @@
++from dataclasses import dataclass
++
++
++@dataclass(frozen=True)
++class Money:
++    cents: int
++    currency: str = "USD"
++
++    def add(self, other: "Money") -> "Money":
++        if other.currency != self.currency:
++            raise ValueError("currency mismatch")
++        return Money(self.cents + other.cents, self.currency)

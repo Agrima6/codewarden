@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "app/users.py",
+      "lines": [
+        6
+      ],
+      "category": "security"
+    }
+  ]
+}

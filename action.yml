@@ -1,0 +1,42 @@
+name: CodeWarden
+description: AI-powered pull request review. Posts severity-ranked inline comments on bugs, security issues and risky changes.
+author: CodeWarden
+
+inputs:
+  github_token:
+    description: Token used to read the PR and post the review (secrets.GITHUB_TOKEN)
+    required: true
+  provider:
+    description: gemini | ollama | rules
+    default: gemini
+  model:
+    description: Model name (empty = provider default)
+    default: ""
+  gemini_api_key:
+    description: Google Gemini API key (required when provider is gemini)
+    required: false
+  config:
+    description: Path to a .codewarden.yml
+    default: .codewarden.yml
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install CodeWarden
+      shell: bash
+      run: pip install --quiet "${{ github.action_path }}"
+    - name: Review pull request
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GEMINI_API_KEY: ${{ inputs.gemini_api_key }}
+        CODEWARDEN_PROVIDER: ${{ inputs.provider }}
+        CODEWARDEN_MODEL: ${{ inputs.model }}
+        CODEWARDEN_CONFIG: ${{ inputs.config }}
+      run: |
+        args=()
+        if [ -f "$CODEWARDEN_CONFIG" ]; then args+=(--config "$CODEWARDEN_CONFIG"); fi
+        codewarden action "${args[@]}"

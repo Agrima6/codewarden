@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "jobs/sync.py",
+      "lines": [
+        10
+      ],
+      "category": "bug"
+    }
+  ]
+}

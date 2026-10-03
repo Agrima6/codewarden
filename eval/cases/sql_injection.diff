@@ -1,0 +1,19 @@
+diff --git a/app/users.py b/app/users.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/app/users.py
+@@ -0,0 +1,13 @@
++import sqlite3
++
++
++def get_user(conn, username):
++    cursor = conn.cursor()
++    cursor.execute(f"SELECT id, email FROM users WHERE name = '{username}'")
++    return cursor.fetchone()
++
++
++def count_users(conn):
++    cursor = conn.cursor()
++    cursor.execute("SELECT COUNT(*) FROM users")
++    return cursor.fetchone()[0]

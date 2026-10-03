@@ -1,0 +1,19 @@
+# CodeWarden configuration. Every key is optional; these are the defaults you are most likely to change.
+
+provider: gemini          # gemini | ollama | rules (offline, rule-based baseline)
+model: ""                 # empty = provider default (gemini-2.5-flash / qwen2.5-coder:7b)
+
+min_severity: low         # drop findings below this level: low | medium | high | critical
+min_confidence: 0.5       # drop findings the model is unsure about (0-1)
+max_comments: 25          # cap inline comments per run, highest severity first
+fail_on: none             # fail the CI check when a finding at/above this level exists: none | high | critical ...
+
+exclude:                  # extra glob patterns to skip, added to the built-in list (lockfiles, images, dist/, node_modules/ ...)
+  - "*.generated.*"
+
+redact_secrets: true      # strip credentials from code before it is sent to the model
+
+rag:
+  enabled: true           # give the model related code from the repository
+  backend: bm25           # bm25 (no dependencies) | chroma (pip install 'codewarden[chroma]')
+  top_k: 4

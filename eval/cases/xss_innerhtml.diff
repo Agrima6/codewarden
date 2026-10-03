@@ -1,0 +1,15 @@
+diff --git a/web/comments.js b/web/comments.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/web/comments.js
+@@ -0,0 +1,9 @@
++export function renderComment(container, comment) {
++  const item = document.createElement("li");
++  item.innerHTML = "<b>" + comment.author + "</b>: " + comment.text;
++  container.appendChild(item);
++}
++
++export function clear(container) {
++  container.textContent = "";
++}
