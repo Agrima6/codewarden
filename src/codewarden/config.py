@@ -30,6 +30,7 @@ DEFAULT_RAG_EXTENSIONS = [
 class RagConfig:
     enabled: bool = True
     backend: str = "bm25"  # bm25 | chroma
+    chunker: str = "lines"  # lines | langchain
     top_k: int = 4
     chunk_lines: int = 40
     overlap: int = 8
@@ -67,6 +68,8 @@ class Config:
             raise ValueError("max_comments must be >= 1 and max_chars_per_request >= 500")
         if self.rag.backend not in ("bm25", "chroma"):
             raise ValueError("rag.backend must be 'bm25' or 'chroma'")
+        if self.rag.chunker not in ("lines", "langchain"):
+            raise ValueError("rag.chunker must be 'lines' or 'langchain'")
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Config":

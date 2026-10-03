@@ -1,0 +1,26 @@
+diff --git a/app/orders.py b/app/orders.py
+index 1006045..d675247 100644
+--- a/app/orders.py
++++ b/app/orders.py
+@@ -14,4 +14,9 @@ def get_order(request, order_id):
+ 
+ 
+ def order_total(items):
++    """Total price of all line items, in cents."""
+     return sum(item["price"] * item["qty"] for item in items)
++
++
++def order_count(rows):
++    return len(rows)
+diff --git a/tests/test_orders.py b/tests/test_orders.py
+index 630d2ac..cf4269b 100644
+--- a/tests/test_orders.py
++++ b/tests/test_orders.py
+@@ -3,3 +3,7 @@ from app.orders import order_total
+ 
+ def test_order_total_sums_line_items():
+     assert order_total([{"price": 5, "qty": 2}, {"price": 1, "qty": 3}]) == 13
++
++
++def test_order_total_of_empty_cart_is_zero():
++    assert order_total([]) == 0

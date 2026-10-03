@@ -18,7 +18,11 @@ def build_retriever(root: str | Path, cfg: RagConfig) -> Retriever | None:
         return None
     chunks: list[Chunk] = []
     for path, text in iter_repo_files(Path(root), cfg.extensions, cfg.max_files, cfg.max_file_bytes):
-        chunks.extend(chunk_text(path, text, cfg.chunk_lines, cfg.overlap))
+        if cfg.chunker == "langchain":
+            from codewarden.rag.lc import chunk_text_langchain
+            chunks.extend(chunk_text_langchain(path, text))
+        else:
+            chunks.extend(chunk_text(path, text, cfg.chunk_lines, cfg.overlap))
     if not chunks:
         return None
     if cfg.backend == "chroma":

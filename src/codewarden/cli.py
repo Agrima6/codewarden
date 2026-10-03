@@ -159,6 +159,88 @@ def cmd_eval(args) -> int:
     return 0
 
 
+def _find_dir(rel: str) -> Path | None:
+    for base in (Path.cwd(), Path(__file__).resolve().parents[2]):
+        if (base / rel).is_dir():
+            return base / rel
+    return None
+
+
+def _serve(args, *, repo_root: Path, db: Path, seed: bool) -> int:
+    try:
+        import uvicorn
+        from codewarden.server import create_app
+    except ImportError:
+        print("error: the dashboard needs: pip install 'codewarden[web]'", file=sys.stderr)
+        return 2
+    from codewarden.services import Engine
+    from codewarden.store import Store
+
+    token = os.environ.get("CODEWARDEN_DASHBOARD_TOKEN") or None
+    if args.host not in ("127.0.0.1", "localhost", "::1") and not token:
+        print("error: refusing to listen on a non-local address without CODEWARDEN_DASHBOARD_TOKEN set", file=sys.stderr)
+        return 2
+    engine = Engine(Store(db), repo_root, args.config, _find_dir(args.eval_dir), _find_dir(args.demo_dir))
+    if seed:
+        engine.seed_demo()
+    url = f"http://{args.host}:{args.port}"
+    print(f"CodeWarden dashboard: {url}   (repo: {engine.repo_root}, db: {db})")
+    if args.open:
+        import threading
+        import webbrowser
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    uvicorn.run(create_app(engine, token), host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
+def cmd_serve(args) -> int:
+    return _serve(args, repo_root=Path(args.repo_root), db=Path(args.db), seed=False)
+
+
+def cmd_demo(args) -> int:
+    shop = _find_dir("demo/shop")
+    if shop is None or _find_dir(args.demo_dir) is None:
+        print("error: run this from the codewarden repository (demo/ folder not found)", file=sys.stderr)
+        return 2
+    db = Path(args.db)
+    db.unlink(missing_ok=True)
+    return _serve(args, repo_root=shop, db=db, seed=True)
+
+
+def cmd_ask(args) -> int:
+    from codewarden.qa import answer_question
+    cfg = _apply_overrides(Config.load(args.config), args)
+    cfg.rag.enabled = True
+    retriever = build_retriever(args.repo_root, cfg.rag)
+    if retriever is None:
+        print("No indexable files found.")
+        return 1
+    try:
+        llm = get_llm(cfg)
+    except LLMError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    res = answer_question(args.question, retriever, llm, k=args.k)
+    print(res["answer"] or f"error: {res['error']}")
+    print("\nSources:")
+    for s in res["sources"]:
+        print(f"  {s['path']}:{s['start']}-{s['end']}")
+    return 0
+
+
+def cmd_testgen(args) -> int:
+    from codewarden.testgen import generate_tests
+    cfg = _apply_overrides(Config.load(args.config), args)
+    try:
+        llm = get_llm(cfg)
+        out = generate_tests(Path(args.diff_file).read_text(), args.file, llm)
+    except (LLMError, RuntimeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(out["code"] or out["note"])
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="codewarden", description="AI-powered pull request review assistant")
     p.add_argument("--version", action="version", version=f"codewarden {__version__}")
@@ -192,6 +274,38 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("-k", type=int, default=4)
     s.add_argument("--repo-root", default=".")
     s.set_defaults(fn=cmd_search)
+
+    def web_opts(sp):
+        sp.add_argument("--host", default="127.0.0.1")
+        sp.add_argument("--port", type=int, default=8765)
+        sp.add_argument("--config")
+        sp.add_argument("--eval-dir", default="eval/cases")
+        sp.add_argument("--demo-dir", default="demo/prs")
+        sp.add_argument("--no-open", dest="open", action="store_false", help="do not open a browser tab")
+
+    sv = sub.add_parser("serve", help="start the web dashboard")
+    web_opts(sv)
+    sv.add_argument("--repo-root", default=".", help="repository indexed for RAG context and code Q&A")
+    sv.add_argument("--db", default=".codewarden/dashboard.db")
+    sv.set_defaults(fn=cmd_serve)
+
+    dm = sub.add_parser("demo", help="start the dashboard pre-loaded with demo pull requests (no API key needed)")
+    web_opts(dm)
+    dm.add_argument("--db", default=".codewarden/demo.db")
+    dm.set_defaults(fn=cmd_demo)
+
+    q = sub.add_parser("ask", help="ask a question about the repository (RAG Q&A)")
+    common(q, rag=False)
+    q.add_argument("question")
+    q.add_argument("-k", type=int, default=5)
+    q.add_argument("--repo-root", default=".")
+    q.set_defaults(fn=cmd_ask)
+
+    t = sub.add_parser("testgen", help="generate unit tests for a file in a diff")
+    common(t, rag=False)
+    t.add_argument("--diff-file", required=True)
+    t.add_argument("--file", required=True, help="path of the file inside the diff")
+    t.set_defaults(fn=cmd_testgen)
 
     e = sub.add_parser("eval", help="score the reviewer on seeded-bug cases")
     common(e, rag=False)

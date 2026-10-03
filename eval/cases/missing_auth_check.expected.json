@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "api/admin.py",
+      "lines": [
+        11
+      ],
+      "category": "security"
+    }
+  ]
+}

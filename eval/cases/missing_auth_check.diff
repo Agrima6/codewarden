@@ -1,0 +1,27 @@
+diff --git a/api/admin.py b/api/admin.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/api/admin.py
+@@ -0,0 +1,21 @@
++from flask import Flask, request, jsonify
++
++app = Flask(__name__)
++
++
++def current_user():
++    return getattr(request, "user", None)
++
++
++@app.route("/admin/users/<int:user_id>", methods=["DELETE"])
++def delete_user(user_id):
++    db.delete("users", user_id)
++    return jsonify({"deleted": user_id})
++
++
++@app.route("/profile")
++def profile():
++    user = current_user()
++    if user is None:
++        return jsonify({"error": "unauthorized"}), 401
++    return jsonify({"name": user.name})

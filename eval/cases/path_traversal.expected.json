@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "files/download.py",
+      "lines": [
+        7
+      ],
+      "category": "security"
+    }
+  ]
+}

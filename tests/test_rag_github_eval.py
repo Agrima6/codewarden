@@ -127,9 +127,9 @@ def test_existing_fingerprints_paginates():
 
 def test_github_client_validates_inputs():
     with pytest.raises(GitHubError):
-        GitHubClient("", "o/r")
-    with pytest.raises(GitHubError):
         GitHubClient("t", "not-a-repo")
+    with pytest.raises(GitHubError):
+        GitHubClient("", "o/r").post_review(1, "sha", "s", [])
 
 
 def test_eval_scores_rules_baseline_on_seeded_cases():
@@ -137,6 +137,9 @@ def test_eval_scores_rules_baseline_on_seeded_cases():
     cfg = Config()
     cfg.rag.enabled = False
     totals = summarize(run_eval(cases, cfg, RulesLLM()))
-    assert totals["cases"] == 7
-    assert totals["recall"] >= 0.8
-    assert totals["precision"] >= 0.8
+    assert totals["cases"] == 12
+    # The baseline is a regex reviewer: good at pattern bugs, blind to logic/authorisation bugs, and it
+    # raises one false alarm on the safe-but-scary trap case. Real models should beat this.
+    assert 0.5 <= totals["recall"] <= 0.7
+    assert 0.8 <= totals["precision"] < 1.0
+    assert totals["false_positives"] == 1

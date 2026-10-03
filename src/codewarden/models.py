@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 SEVERITIES = ("low", "medium", "high", "critical")
 CATEGORIES = ("bug", "security", "performance", "maintainability", "style", "test")
@@ -42,6 +42,10 @@ class Finding:
     confidence: float = 0.7
     line_text: str = ""
     anchored: bool = True
+    replacement: str = ""
+
+    def to_dict(self) -> dict:
+        return asdict(self) | {"fingerprint": self.fingerprint}
 
     @property
     def fingerprint(self) -> str:
@@ -60,6 +64,9 @@ class ReviewResult:
     dropped_below_severity: int = 0
     dropped_duplicates: int = 0
     dropped_over_cap: int = 0
+    context_used: dict[str, list[str]] = field(default_factory=dict)
+    requests: int = 0
+    duration_ms: int = 0
 
     def worst_severity(self) -> str | None:
         if not self.findings:

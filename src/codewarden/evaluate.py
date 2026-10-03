@@ -20,6 +20,8 @@ class CaseScore:
     findings: int
     true_positive_findings: int
     categories_ok: int
+    expected_desc: str = ""
+    found_desc: str = ""
 
 
 def score_case(findings: list[Finding], expected: list[dict]) -> tuple[int, int, int]:
@@ -44,7 +46,9 @@ def run_eval(cases_dir: Path, cfg: Config, llm: LLM) -> list[CaseScore]:
         expected = json.loads(exp_path.read_text())["expected"] if exp_path.exists() else []
         res = review_diff(diff_path.read_text(), cfg, llm, retriever=None)
         m, tp, cat = score_case(res.findings, expected)
-        scores.append(CaseScore(diff_path.stem, len(expected), m, len(res.findings), tp, cat))
+        exp_desc = "; ".join(f"{e['path']}:{e['lines'][0]} ({e.get('category', '?')})" for e in expected) or "no issues"
+        found_desc = "; ".join(f"{f.path}:{f.line} {f.title}" for f in res.findings) or "no findings"
+        scores.append(CaseScore(diff_path.stem, len(expected), m, len(res.findings), tp, cat, exp_desc, found_desc))
     return scores
 
 

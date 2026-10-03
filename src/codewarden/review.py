@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from codewarden.config import Config
 from codewarden.diff import FileDiff, Hunk, parse_diff
 from codewarden.filters import skip_reason
@@ -73,6 +75,7 @@ def _context_for(retriever, f: FileDiff, batch: list[Hunk], k: int):
 
 def review_diff(diff_text: str, cfg: Config, llm: LLM, retriever=None, pr_title: str = "",
                 pr_body: str = "", seen_fingerprints: set[str] | None = None) -> ReviewResult:
+    started = time.monotonic()
     result = ReviewResult()
     candidates: list[Finding] = []
     reviewed = 0
@@ -87,12 +90,16 @@ def review_diff(diff_text: str, cfg: Config, llm: LLM, retriever=None, pr_title:
         reviewed += 1
         result.files_reviewed.append(f.path)
 
+        added = f.added_lines()
         for batch in make_batches(f, cfg.max_chars_per_request):
             diff_block = "\n".join(h.render() for h in batch)
             context = _context_for(retriever, f, batch, cfg.rag.top_k)
+            refs = result.context_used.setdefault(f.path, [])
+            refs += [r for r in (f"{c.path}:{c.start}-{c.end}" for c in context) if r not in refs]
             user = build_user_prompt(f.path, diff_block, pr_title, pr_body, context)
             if cfg.redact_secrets:
                 user = redact(user)
+            result.requests += 1
             try:
                 raw = llm.complete(SYSTEM_PROMPT, user)
             except LLMError as exc:
@@ -105,6 +112,9 @@ def review_diff(diff_text: str, cfg: Config, llm: LLM, retriever=None, pr_title:
                                   explanation=item["explanation"], suggestion=item["suggestion"],
                                   confidence=item["confidence"])
                 finding.line_text = f.line_text(finding.line).strip()
+                if item["replacement"] and finding.anchored and finding.line in added \
+                        and item["replacement"].strip() != finding.line_text:
+                    finding.replacement = item["replacement"]
                 candidates.append(finding)
 
     seen = set(seen_fingerprints or ())
@@ -123,4 +133,5 @@ def review_diff(diff_text: str, cfg: Config, llm: LLM, retriever=None, pr_title:
     kept.sort(key=lambda fd: (-severity_rank(fd.severity), -fd.confidence, fd.path, fd.line))
     result.dropped_over_cap = max(0, len(kept) - cfg.max_comments)
     result.findings = kept[: cfg.max_comments]
+    result.duration_ms = int((time.monotonic() - started) * 1000)
     return result

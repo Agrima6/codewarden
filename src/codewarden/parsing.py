@@ -24,6 +24,13 @@ def _extract_json(text: str):
     return None
 
 
+def _single_line(value) -> str:
+    """A one-line code replacement, or "" when the model gave something we cannot apply safely."""
+    if not isinstance(value, str) or not value.strip() or "\n" in value.rstrip("\n") or "```" in value:
+        return ""
+    return value.rstrip("\n")
+
+
 def parse_findings(text: str) -> list[dict]:
     """Turn raw model output into validated finding dicts. Never raises on bad model output."""
     data = _extract_json(text)
@@ -54,6 +61,7 @@ def parse_findings(text: str) -> list[dict]:
             "title": title or explanation[:80],
             "explanation": explanation or title,
             "suggestion": str(item.get("suggestion") or "").strip(),
+            "replacement": _single_line(item.get("replacement")),
             "confidence": confidence,
         })
     return out

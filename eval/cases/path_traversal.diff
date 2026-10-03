@@ -1,0 +1,18 @@
+diff --git a/files/download.py b/files/download.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/files/download.py
+@@ -0,0 +1,12 @@
++import os
++
++UPLOAD_DIR = "/srv/uploads"
++
++
++def read_upload(filename):
++    with open(os.path.join(UPLOAD_DIR, filename), "rb") as fh:
++        return fh.read()
++
++
++def list_uploads():
++    return sorted(os.listdir(UPLOAD_DIR))

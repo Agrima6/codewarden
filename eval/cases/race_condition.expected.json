@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "billing/wallet.py",
+      "lines": [
+        8
+      ],
+      "category": "bug"
+    }
+  ]
+}

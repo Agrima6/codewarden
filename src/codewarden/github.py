@@ -16,17 +16,14 @@ class GitHubError(RuntimeError):
 
 class GitHubClient:
     def __init__(self, token: str, repo: str, session: requests.Session | None = None):
-        if not token:
-            raise GitHubError("GITHUB_TOKEN is not set")
         if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
             raise GitHubError(f"Invalid repository {repo!r}, expected owner/name")
         self.repo = repo
         self.s = session or requests.Session()
-        self.s.headers.update({
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "codewarden",
-        })
+        self.token = token
+        self.s.headers.update({"X-GitHub-Api-Version": "2022-11-28", "User-Agent": "codewarden"})
+        if token:  # reading public PRs works without one; posting does not
+            self.s.headers["Authorization"] = f"Bearer {token}"
 
     def _req(self, method: str, path: str, accept: str = "application/vnd.github+json", **kw):
         resp = self.s.request(method, f"{API}/repos/{self.repo}{path}", headers={"Accept": accept},
@@ -64,6 +61,8 @@ class GitHubClient:
 
     def post_review(self, number: int, head_sha: str, summary: str, findings: list[Finding]) -> tuple[int, int]:
         """Post one review with inline comments. Returns (inline_posted, moved_to_summary)."""
+        if not self.token:
+            raise GitHubError("GITHUB_TOKEN is not set; cannot post a review")
         inline = [f for f in findings if f.anchored]
         payload_comments = [{"path": f.path, "line": f.line, "side": "RIGHT", "body": render_comment(f)} for f in inline]
         body = {"commit_id": head_sha, "event": "COMMENT", "body": summary, "comments": payload_comments}

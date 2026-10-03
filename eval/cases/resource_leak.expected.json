@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "io/report.py",
+      "lines": [
+        5
+      ],
+      "category": "bug"
+    }
+  ]
+}

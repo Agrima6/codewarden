@@ -1,0 +1,22 @@
+diff --git a/billing/wallet.py b/billing/wallet.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/billing/wallet.py
+@@ -0,0 +1,16 @@
++import threading
++
++wallets = {}
++_log_lock = threading.Lock()
++
++
++def withdraw(wallet, amount):
++    if wallet.balance >= amount:
++        wallet.balance = wallet.balance - amount
++        return True
++    return False
++
++
++def log(msg):
++    with _log_lock:
++        print(msg)

@@ -36,6 +36,14 @@ class FileDiff:
     is_deleted: bool = False
     is_new: bool = False
 
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path, "is_new": self.is_new, "is_deleted": self.is_deleted, "is_binary": self.is_binary,
+            "hunks": [{"header": h.header,
+                       "lines": [{"k": ln.kind, "t": ln.text, "n": ln.new_no, "o": ln.old_no} for ln in h.lines]}
+                      for h in self.hunks],
+        }
+
     def commentable_lines(self) -> set[int]:
         """New-file lines GitHub accepts an inline comment on (added or context)."""
         return {ln.new_no for h in self.hunks for ln in h.lines if ln.new_no is not None}

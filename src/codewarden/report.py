@@ -11,6 +11,8 @@ def render_comment(f: Finding) -> str:
     lines = [f"**[{f.severity.upper()}] {f.category.title()}** - {f.title}", "", f.explanation]
     if f.suggestion:
         lines += ["", "**Suggested fix:**", f.suggestion]
+    if f.replacement and f.anchored:
+        lines += ["", "```suggestion", f.replacement, "```"]
     lines += ["", f"<sub>CodeWarden - confidence {f.confidence:.0%}. Automated review; verify before acting.</sub>",
               f"<!-- codewarden:{f.fingerprint} -->"]
     return "\n".join(lines)
