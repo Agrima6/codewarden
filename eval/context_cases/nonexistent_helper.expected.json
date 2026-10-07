@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "app/profile.py",
+      "lines": [
+        1
+      ],
+      "category": "bug"
+    }
+  ]
+}

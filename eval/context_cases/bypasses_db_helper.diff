@@ -1,0 +1,15 @@
+diff --git a/app/reports.py b/app/reports.py
+new file mode 100644
+index 0000000..817fcf0
+--- /dev/null
++++ b/app/reports.py
+@@ -0,0 +1,9 @@
++import sqlite3
++
++from app.auth import require_login
++
++
++def monthly_totals(request, month):
++    require_login(request)
++    conn = sqlite3.connect("shop.db")
++    return conn.execute("SELECT SUM(total) FROM orders WHERE month = ?", (month,)).fetchone()

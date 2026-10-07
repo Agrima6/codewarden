@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import threading
+import json
 import time
 from dataclasses import fields
 from pathlib import Path
@@ -13,11 +14,14 @@ import requests
 from codewarden.config import Config
 from codewarden.diff import parse_diff
 from codewarden.evaluate import run_eval, summarize
+from codewarden.experiment import ExperimentError, build_systems, dataset_hash, load_suite, run_experiment
+from codewarden.prompts import SYSTEM_PROMPT
 from codewarden.github import GitHubClient, GitHubError
 from codewarden.llm import LLMError, get_llm
 from codewarden.models import Finding
 from codewarden.qa import answer_question
 from codewarden.rag import build_retriever
+from codewarden.repos import RepoError, RepoManager, parse_repo_url, recent_pulls
 from codewarden.report import render_summary
 from codewarden.review import review_diff
 from codewarden.store import Store
@@ -46,16 +50,18 @@ class Engine:
     """Everything the dashboard and webhook do, independent of HTTP."""
 
     def __init__(self, store: Store, repo_root: str | Path = ".", config_path: str | None = None,
-                 eval_dir: str | Path | None = None, demo_dir: str | Path | None = None):
+                 eval_dir: str | Path | None = None, demo_dir: str | Path | None = None,
+                 repos_dir: str | Path | None = None):
         self.store = store
         self.repo_root = Path(repo_root).resolve()
         self.config_path = config_path
         self.eval_dir = Path(eval_dir) if eval_dir else None
         self.demo_dir = Path(demo_dir) if demo_dir else None
-        self._retriever = None
-        self._retriever_key = None
-        self._built_at = 0.0
+        self._retrievers: dict[tuple, tuple[object, float]] = {}
+        self.repos = RepoManager(Path(repos_dir) if repos_dir else Path(".codewarden/repos"))
         self._lock = threading.Lock()
+        self._exp_thread: threading.Thread | None = None
+        store.fail_stale_experiments()
 
     def config(self, provider: str | None = None, model: str | None = None, rag: bool | None = None) -> Config:
         cfg = Config.load(self.config_path)
@@ -71,16 +77,64 @@ class Engine:
         cfg.validate()
         return cfg
 
-    def retriever(self, cfg: Config):
+    def retriever(self, cfg: Config, root: Path | None = None):
         if not cfg.rag.enabled:
             return None
-        key = (cfg.rag.backend, cfg.rag.chunker, cfg.rag.chunk_lines, cfg.rag.extensions.__len__())
+        root = (root or self.repo_root).resolve()
+        key = (str(root), cfg.rag.backend, cfg.rag.chunker, cfg.rag.chunk_lines)
         with self._lock:
-            if self._retriever_key != key or self._retriever is None or time.time() - self._built_at > 120:
-                getattr(self._retriever, "close", lambda: None)()
-                self._retriever = build_retriever(self.repo_root, cfg.rag)
-                self._retriever_key, self._built_at = key, time.time()
-            return self._retriever
+            hit = self._retrievers.get(key)
+            if hit and time.time() - hit[1] < 300:
+                return hit[0]
+            if hit:
+                getattr(hit[0], "close", lambda: None)()
+            retriever = build_retriever(root, cfg.rag)
+            if len(self._retrievers) >= 4:  # keep memory bounded: drop the oldest index
+                oldest = min(self._retrievers, key=lambda k: self._retrievers[k][1])
+                getattr(self._retrievers.pop(oldest)[0], "close", lambda: None)()
+            self._retrievers[key] = (retriever, time.time())
+            return retriever
+
+    def repo_root_for(self, slug: str | None) -> Path:
+        if not slug or slug == "_default":
+            return self.repo_root
+        try:
+            path = self.repos.path_for(slug)
+        except RepoError as exc:
+            raise UserError(str(exc)) from exc
+        if not path.exists():
+            raise UserError("That repository is not connected.")
+        return path
+
+    # ---- connected repositories ------------------------------------------------------------
+    def list_repos(self) -> dict:
+        files = sum(1 for p in self.repo_root.rglob("*") if p.is_file() and ".git" not in p.parts)
+        return {"default": {"slug": "_default", "repo": self.repo_root.name, "files": files},
+                "connected": self.repos.list()}
+
+    def connect_repo(self, url: str) -> dict:
+        try:
+            info = self.repos.connect(url)
+        except RepoError as exc:
+            raise UserError(str(exc)) from exc
+        cfg = self.config(None, None, True)
+        retriever = self.retriever(cfg, self.repos.path_for(info["slug"]))
+        info["chunks"] = len(retriever.chunks) if retriever else 0
+        return info
+
+    def remove_repo(self, slug: str) -> None:
+        try:
+            self.repos.remove(slug)
+        except RepoError as exc:
+            raise UserError(str(exc)) from exc
+
+    def repo_pulls(self, slug: str) -> list[dict]:
+        owner, _, repo = slug.partition("__")
+        self.repo_root_for(slug)
+        try:
+            return recent_pulls(owner, repo, os.environ.get("GITHUB_TOKEN", ""))
+        except RepoError as exc:
+            raise UserError(str(exc)) from exc
 
     def llm(self, cfg: Config):
         try:
@@ -93,12 +147,12 @@ class Engine:
         out = [{"id": "rules", "label": "Rule-based baseline", "available": True, "models": [],
                 "detail": "Offline, deterministic, no model"}]
         has_key = bool(os.environ.get("GEMINI_API_KEY"))
-        out.append({"id": "gemini", "label": "Google Gemini", "available": has_key, "models": ["gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-pro"],
+        out.append({"id": "gemini", "label": "Google Gemini", "available": has_key, "models": ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash-preview"],
                     "detail": "API key found" if has_key else "Set GEMINI_API_KEY and restart the server"})
         host = (os.environ.get("OLLAMA_HOST") or "http://localhost:11434").rstrip("/")
         try:
             tags = requests.get(f"{host}/api/tags", timeout=0.7).json()
-            models = [m["name"] for m in tags.get("models", [])]
+            models = [m["name"] for m in sorted(tags.get("models", []), key=lambda m: -int(m.get("size") or 0))]  # largest first
             out.append({"id": "ollama", "label": "Ollama (local)", "available": bool(models), "models": models,
                         "detail": f"{len(models)} local model(s)" if models else "Running, but no models pulled"})
         except (requests.RequestException, ValueError, KeyError):
@@ -109,14 +163,14 @@ class Engine:
     # ---- reviews ---------------------------------------------------------------------------
     def review_text(self, diff: str, *, source: str, title: str, provider: str | None, model: str | None,
                     rag: bool | None, repo: str = "", pr_number: int | None = None, head_sha: str = "",
-                    pr_body: str = "", seen: set[str] | None = None) -> dict:
+                    pr_body: str = "", seen: set[str] | None = None, root: Path | None = None) -> dict:
         if not diff.strip():
             raise UserError("The diff is empty.")
         if len(diff.encode()) > MAX_DIFF_BYTES:
             raise UserError("The diff is larger than 2 MB. Review a smaller change.")
         cfg = self.config(provider, model, rag)
         llm = self.llm(cfg)
-        result = review_diff(diff, cfg, llm, self.retriever(cfg), title, pr_body, seen)
+        result = review_diff(diff, cfg, llm, self.retriever(cfg, root), title, pr_body, seen)
         if result.requests and len(result.errors) >= result.requests:
             raise UserError(f"The {cfg.provider} request failed, so no review was produced. {result.errors[0]}")
         rid = self.store.add_review(source=source, title=title, provider=cfg.provider, model=cfg.resolved_model(),
@@ -146,11 +200,18 @@ class Engine:
             diff = gh.get_diff(number)
         except GitHubError as exc:
             raise UserError(f"{exc}. Private repositories need GITHUB_TOKEN set on the server.") from exc
-        if rag is not False and _origin_slug(self.repo_root) != f"{owner}/{repo}".lower():
-            rag = False  # the indexed checkout is a different repository, so its code would be misleading context
+        root = None
+        if rag is not False:
+            if _origin_slug(self.repo_root) == f"{owner}/{repo}".lower():
+                root = self.repo_root
+            else:  # fetch the repository so the model sees real surrounding code, not just the diff
+                try:
+                    root = self.repos.path_for(self.repos.connect(f"https://github.com/{owner}/{repo}")["slug"])
+                except RepoError:
+                    rag = False
         return self.review_text(diff, source="pr", title=pr["title"] or f"{owner}/{repo}#{number}",
                                 provider=provider, model=model, rag=rag, repo=f"{owner}/{repo}",
-                                pr_number=number, head_sha=pr["head_sha"], pr_body=pr["body"])
+                                pr_number=number, head_sha=pr["head_sha"], pr_body=pr["body"], root=root)
 
     def post_to_github(self, review_id: int) -> dict:
         rv = self.store.get_review(review_id)
@@ -186,18 +247,18 @@ class Engine:
         except (ValueError, RuntimeError) as exc:
             raise UserError(str(exc)) from exc
 
-    def ask(self, question: str, provider: str | None, model: str | None) -> dict:
+    def ask(self, question: str, provider: str | None, model: str | None, repo: str | None = None) -> dict:
         if not question.strip():
             raise UserError("Ask a question about the code.")
         cfg = self.config(provider, model, True)
-        retriever = self.retriever(cfg)
+        retriever = self.retriever(cfg, self.repo_root_for(repo))
         if retriever is None:
             raise UserError("No indexable source files were found in the repository root.")
         return answer_question(question, retriever, self.llm(cfg), k=max(cfg.rag.top_k, 5))
 
-    def search(self, query: str, k: int = 6) -> dict:
+    def search(self, query: str, k: int = 6, repo: str | None = None) -> dict:
         cfg = self.config(None, None, True)
-        retriever = self.retriever(cfg)
+        retriever = self.retriever(cfg, self.repo_root_for(repo))
         if retriever is None:
             return {"chunks": 0, "results": []}
         hits = retriever.search(query, k=k) if query.strip() else []
@@ -221,6 +282,71 @@ class Engine:
                 if d and (d / f"{sample_id}.diff").exists():
                     return (d / f"{sample_id}.diff").read_text()
         raise UserError("Unknown sample")
+
+    # ---- experiments -----------------------------------------------------------------------
+    def experiment_meta(self) -> dict:
+        if self.eval_dir is None or not self.eval_dir.exists():
+            raise UserError("No evaluation datasets are configured on this server (pass --eval-dir).")
+        ctx = self.eval_dir.parent / "context_cases"
+        suites = {}
+        for name, d in (("general", self.eval_dir), ("context", ctx)):
+            if d.exists():
+                cases = load_suite(d)
+                suites[name] = {"cases": len(cases), "bugs": sum(len(c["expected"]) for c in cases),
+                                "clean": sum(1 for c in cases if not c["expected"]),
+                                "names": [c["name"] for c in cases]}
+        cfg = self.config()
+        calls = suites.get("general", {}).get("cases", 0) + 2 * suites.get("context", {}).get("cases", 0)
+        import hashlib
+        return {"suites": suites, "calls_per_repeat_per_model": calls,
+                "dataset_hash": dataset_hash(*[d for d in (self.eval_dir, ctx) if d.exists()]),
+                "prompt_hash": hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:12],
+                "rag": {"backend": cfg.rag.backend, "chunker": cfg.rag.chunker, "top_k": cfg.rag.top_k},
+                "temperature": cfg.temperature, "systems": self.provider_status()}
+
+    def start_experiment(self, providers: list[str], repeats: int) -> dict:
+        if self.eval_dir is None or not self.eval_dir.exists():
+            raise UserError("No evaluation datasets are configured on this server (pass --eval-dir).")
+        if self._exp_thread and self._exp_thread.is_alive():
+            raise UserError("An experiment is already running. Wait for it to finish.")
+        available = {p["id"]: p for p in self.provider_status()}
+        providers = [p for p in dict.fromkeys(providers) if p in PROVIDERS]
+        if not providers:
+            raise UserError("Choose at least one reviewer.")
+        for p in providers:
+            if not available[p]["available"]:
+                raise UserError(f"{available[p]['label']} is not available: {available[p]['detail']}")
+        if not 1 <= repeats <= 5:
+            raise UserError("Repeats must be between 1 and 5.")
+        cfg = self.config()
+        models = {"ollama": next(iter(available["ollama"]["models"]), "")}
+        if "gemini" in providers:
+            from codewarden.llm.gemini import pick_working_model
+            pinned = pick_working_model(os.environ.get("GEMINI_API_KEY", ""))
+            if not pinned:
+                raise UserError("Gemini is not responding right now (busy or out of quota), so the experiment was not started. Try again in a few minutes.")
+            models["gemini"] = pinned  # one model for the whole run keeps the comparison valid
+        systems = build_systems(providers, models)
+        suites_total = 12 + 7  # placeholder replaced by the engine's real total on first progress callback
+        exp_id = self.store.create_experiment({"providers": providers, "repeats": repeats,
+                                               "systems": [s.to_dict() for s in systems]}, suites_total)
+
+        def progress(done: int, total: int, label: str) -> None:
+            self.store.update_experiment(exp_id, done=done, total=total, label=label)
+
+        def work() -> None:
+            try:
+                res = run_experiment(systems=systems, repeats=repeats, eval_dir=self.eval_dir, base_cfg=cfg,
+                                     progress=progress, project_root=self.eval_dir.parent.parent)
+                self.store.update_experiment(exp_id, status="done", label="Finished", results=res)
+            except ExperimentError as exc:
+                self.store.update_experiment(exp_id, status="failed", error=str(exc))
+            except Exception as exc:  # never leave a run stuck in 'running'
+                self.store.update_experiment(exp_id, status="failed", error=f"Unexpected error: {exc.__class__.__name__}")
+
+        self._exp_thread = threading.Thread(target=work, daemon=True)
+        self._exp_thread.start()
+        return self.store.get_experiment(exp_id)
 
     def seed_demo(self) -> dict:
         """Run the offline reviewer over the bundled demo PRs so a fresh dashboard has real data."""

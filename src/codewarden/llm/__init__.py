@@ -9,7 +9,7 @@ def get_llm(cfg: Config) -> LLM:
     if cfg.provider == "gemini":
         from codewarden.llm.gemini import GeminiLLM
         # An explicitly chosen model is used as is; the default alias falls back when a model is busy or retired.
-        fallbacks = () if cfg.model else ("gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview")
+        fallbacks = () if cfg.model else ("gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite")
         return GeminiLLM(model, cfg.temperature, fallbacks=fallbacks)
     if cfg.provider == "ollama":
         from codewarden.llm.ollama import OllamaLLM

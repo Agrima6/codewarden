@@ -1,5 +1,8 @@
 # Demo guide
 
+> For the mid-term evaluation use [DEMO_DAY.md](DEMO_DAY.md), which maps every evaluation criterion to something you can show.
+
+
 A 6-minute walkthrough that works with **no API key and no internet**. Add a Gemini key (or Ollama) to show the AI-only extras in step 6.
 
 ## Before you present

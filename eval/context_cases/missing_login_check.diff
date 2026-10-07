@@ -1,0 +1,12 @@
+diff --git a/app/invoices.py b/app/invoices.py
+new file mode 100644
+index 0000000..6629a52
+--- /dev/null
++++ b/app/invoices.py
+@@ -0,0 +1,6 @@
++from app.db import run_query
++
++
++def get_invoice(request, invoice_id):
++    rows = run_query("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
++    return rows[0] if rows else None

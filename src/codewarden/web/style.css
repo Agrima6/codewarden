@@ -191,3 +191,11 @@ dialog::backdrop { background: rgba(10, 14, 22, .5); }
   .strip > div:nth-child(n+3) { border-top: 1px solid var(--border); }
   .fcell { padding-left: 12px !important; }
 }
+
+/* charts */
+svg .grid { stroke: var(--border); stroke-width: 1; }
+svg .axis { fill: var(--muted); font-size: 11px; font-family: var(--sans); }
+svg .val { fill: var(--text); font-size: 10.5px; font-family: var(--sans); font-weight: 600; }
+svg .bar-p { fill: var(--accent); } svg .bar-r { fill: var(--ok); } svg .bar-f { fill: var(--med); }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }

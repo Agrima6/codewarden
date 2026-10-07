@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "app/avatars.py",
+      "lines": [
+        10
+      ],
+      "category": "security"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import yaml
 from codewarden.models import SEVERITIES
 
 DEFAULT_MODELS = {
-    "gemini": "gemini-flash-latest",
+    "gemini": "gemini-3.6-flash",
     "ollama": "qwen2.5-coder:7b",
     "rules": "",
 }

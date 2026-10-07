@@ -180,7 +180,8 @@ def _serve(args, *, repo_root: Path, db: Path, seed: bool) -> int:
     if args.host not in ("127.0.0.1", "localhost", "::1") and not token:
         print("error: refusing to listen on a non-local address without CODEWARDEN_DASHBOARD_TOKEN set", file=sys.stderr)
         return 2
-    engine = Engine(Store(db), repo_root, args.config, _find_dir(args.eval_dir), _find_dir(args.demo_dir))
+    engine = Engine(Store(db), repo_root, args.config, _find_dir(args.eval_dir), _find_dir(args.demo_dir),
+                    repos_dir=db.parent / "repos")
     if seed:
         import threading
 
@@ -254,6 +255,37 @@ def cmd_testgen(args) -> int:
     return 0
 
 
+def cmd_experiment(args) -> int:
+    from codewarden.experiment import ExperimentError, build_systems, run_experiment
+    cfg = Config.load(args.config)
+    eval_dir = _find_dir(args.eval_dir)
+    if eval_dir is None:
+        print("error: eval/ folder not found; run from the repository root", file=sys.stderr)
+        return 2
+    providers = [p.strip() for p in args.providers.split(",") if p.strip()]
+    systems = build_systems(providers, {"ollama": args.ollama_model} if args.ollama_model else {})
+
+    def progress(done, total, label):
+        print(f"[{done}/{total}] {label}", flush=True)
+
+    try:
+        res = run_experiment(systems=systems, repeats=args.repeats, eval_dir=eval_dir, base_cfg=cfg, progress=progress)
+    except ExperimentError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"\n{'system':34} {'suite':8} {'P':>6} {'R':>6} {'F1':>6} {'FP':>4} {'FN':>4} {'latency':>9}")
+    for key, m in res["metrics"].items():
+        sid, suite = key.split("|")
+        label = next(s["label"] for s in res["systems"] if s["id"] == sid)
+        f = lambda v: "n/a" if v is None else f"{v:.2f}"
+        print(f"{label[:34]:34} {suite:8} {f(m['precision']):>6} {f(m['recall']):>6} {f(m['f1']):>6} "
+              f"{m['false_positives']:>4} {m['false_negatives']:>4} {m['avg_latency_ms']:>7}ms")
+    if args.out:
+        Path(args.out).write_text(json.dumps(res, indent=2))
+        print(f"\nFull results written to {args.out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="codewarden", description="AI-powered pull request review assistant")
     p.add_argument("--version", action="version", version=f"codewarden {__version__}")
@@ -319,6 +351,15 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--diff-file", required=True)
     t.add_argument("--file", required=True, help="path of the file inside the diff")
     t.set_defaults(fn=cmd_testgen)
+
+    x = sub.add_parser("experiment", help="baseline vs LLM vs LLM+RAG on labelled datasets (reproducible)")
+    x.add_argument("--providers", default="rules", help="comma list of rules,gemini,ollama")
+    x.add_argument("--repeats", type=int, default=1)
+    x.add_argument("--ollama-model", default="")
+    x.add_argument("--eval-dir", default="eval/cases")
+    x.add_argument("--config")
+    x.add_argument("--out", help="write the full JSON results here")
+    x.set_defaults(fn=cmd_experiment)
 
     e = sub.add_parser("eval", help="score the reviewer on seeded-bug cases")
     common(e, rag=False)

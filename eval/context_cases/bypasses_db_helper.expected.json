@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "app/reports.py",
+      "lines": [
+        8
+      ],
+      "category": "maintainability"
+    }
+  ]
+}

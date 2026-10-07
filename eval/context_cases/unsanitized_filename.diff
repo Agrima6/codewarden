@@ -1,0 +1,19 @@
+diff --git a/app/avatars.py b/app/avatars.py
+new file mode 100644
+index 0000000..31478ca
+--- /dev/null
++++ b/app/avatars.py
+@@ -0,0 +1,13 @@
++import os
++
++from app.auth import require_login
++
++AVATAR_DIR = "/srv/avatars"
++
++
++def save_avatar(request, filename, data):
++    require_login(request)
++    target = os.path.join(AVATAR_DIR, filename)
++    with open(target, "wb") as fh:
++        fh.write(data)
++    return target

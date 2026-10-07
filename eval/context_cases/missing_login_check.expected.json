@@ -1,0 +1,11 @@
+{
+  "expected": [
+    {
+      "path": "app/invoices.py",
+      "lines": [
+        4
+      ],
+      "category": "security"
+    }
+  ]
+}

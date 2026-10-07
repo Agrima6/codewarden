@@ -31,11 +31,21 @@ class ReviewIn(BaseModel):
     provider: str | None = None
     model: str | None = None
     rag: bool | None = None
+    repo: str | None = Field(default=None, max_length=200)
 
 
 class EvalIn(BaseModel):
     provider: str
     model: str | None = None
+
+
+class ExperimentIn(BaseModel):
+    providers: list[str] = Field(min_length=1, max_length=3)
+    repeats: int = Field(default=1, ge=1, le=5)
+
+
+class RepoIn(BaseModel):
+    url: str = Field(max_length=300)
 
 
 class TestsIn(BaseModel):
@@ -46,6 +56,7 @@ class TestsIn(BaseModel):
 
 class AskIn(BaseModel):
     question: str = Field(max_length=1000)
+    repo: str | None = Field(default=None, max_length=200)
     provider: str | None = None
     model: str | None = None
 
@@ -128,10 +139,11 @@ def create_app(engine: Engine, dashboard_token: str | None = None, allowed_hosts
         common = dict(provider=body.provider, model=body.model, rag=body.rag)
         if body.source == "pr":
             return engine.review_pr_url(body.pr_url, **common)
+        root = engine.repo_root_for(body.repo) if body.repo else None
         if body.source == "sample":
-            return engine.review_text(engine.sample_diff(body.sample), source="sample",
+            return engine.review_text(engine.sample_diff(body.sample), source="sample", root=root,
                                       title=body.title or f"Sample: {body.sample.replace('_', ' ')}", **common)
-        return engine.review_text(body.diff, source="diff", title=body.title or "Pasted diff", **common)
+        return engine.review_text(body.diff, source="diff", title=body.title or "Pasted diff", root=root, **common)
 
     @app.get("/api/reviews/{review_id}")
     def get_review(review_id: int):
@@ -171,13 +183,55 @@ def create_app(engine: Engine, dashboard_token: str | None = None, allowed_hosts
     def run_eval(body: EvalIn):
         return engine.run_eval(body.provider, body.model)
 
+    @app.get("/api/repos")
+    def list_repos():
+        return engine.list_repos()
+
+    @app.post("/api/repos")
+    def connect_repo(body: RepoIn):
+        return engine.connect_repo(body.url)
+
+    @app.delete("/api/repos/{slug}")
+    def remove_repo(slug: str):
+        engine.remove_repo(slug)
+        return {"ok": True}
+
+    @app.get("/api/repos/{slug}/pulls")
+    def repo_pulls(slug: str):
+        return engine.repo_pulls(slug)
+
+    @app.get("/api/experiment/meta")
+    def experiment_meta():
+        return engine.experiment_meta()
+
+    @app.get("/api/experiments")
+    def list_experiments():
+        return engine.store.list_experiments()
+
+    @app.post("/api/experiments")
+    def start_experiment(body: ExperimentIn):
+        return engine.start_experiment(body.providers, body.repeats)
+
+    @app.get("/api/experiments/{exp_id}")
+    def get_experiment(exp_id: int):
+        exp = engine.store.get_experiment(exp_id)
+        if not exp:
+            raise HTTPException(404, "Experiment not found")
+        return exp
+
+    @app.delete("/api/experiments/{exp_id}")
+    def delete_experiment(exp_id: int):
+        if not engine.store.delete_experiment(exp_id):
+            raise HTTPException(404, "Experiment not found or still running")
+        return {"ok": True}
+
     @app.get("/api/search")
-    def search(q: str = "", k: int = 6):
-        return engine.search(q[:500], max(1, min(k, 15)))
+    def search(q: str = "", k: int = 6, repo: str | None = None):
+        return engine.search(q[:500], max(1, min(k, 15)), repo)
 
     @app.post("/api/ask")
     def ask(body: AskIn):
-        return engine.ask(body.question, body.provider, body.model)
+        return engine.ask(body.question, body.provider, body.model, body.repo)
 
     @app.post("/webhook/github", status_code=202)
     async def github_webhook(request: Request, background: BackgroundTasks):

@@ -1,0 +1,13 @@
+diff --git a/app/refunds.py b/app/refunds.py
+new file mode 100644
+index 0000000..6d4b0a6
+--- /dev/null
++++ b/app/refunds.py
+@@ -0,0 +1,7 @@
++from app.auth import require_login
++from app.db import run_query
++
++
++def refund_status(request, order_id):
++    require_login(request)
++    return run_query("SELECT status FROM refunds WHERE order_id = ?", order_id)

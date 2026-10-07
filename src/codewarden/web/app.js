@@ -25,6 +25,7 @@ const SEV = ['critical', 'high', 'medium', 'low'];
 const ICONS = {
   grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   plus: 'M12 5v14M5 12h14',
+  repo: 'M4 5a2 2 0 0 1 2-2h12v15H6a2 2 0 0 0-2 2zM4 20a2 2 0 0 0 2 2h12M9 7h6M9 11h6',
   flask: 'M9 3h6M10 3v6l-5.500 9.500A2 2 0 0 0 6.200 21h11.600a2 2 0 0 0 1.700-2.500L14 9V3',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.300-4.300',
   gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.400 15a1.700 1.700 0 0 0 .3 1.800l.1.1a2 2 0 1 1-2.800 2.800l-.1-.1a1.700 1.700 0 0 0-1.800-.3 1.700 1.700 0 0 0-1 1.500V21a2 2 0 1 1-4 0v-.1a1.700 1.700 0 0 0-1.100-1.500 1.700 1.700 0 0 0-1.800.3l-.1.1a2 2 0 1 1-2.800-2.800l.1-.1a1.700 1.700 0 0 0 .3-1.800 1.700 1.700 0 0 0-1.500-1H3a2 2 0 1 1 0-4h.1a1.700 1.700 0 0 0 1.500-1.100 1.700 1.700 0 0 0-.3-1.800l-.1-.1a2 2 0 1 1 2.800-2.800l.1.100a1.700 1.700 0 0 0 1.800.3H9a1.700 1.700 0 0 0 1-1.500V3a2 2 0 1 1 4 0v.1a1.700 1.700 0 0 0 1 1.500 1.700 1.700 0 0 0 1.800-.3l.1-.1a2 2 0 1 1 2.800 2.800l-.1.100a1.700 1.700 0 0 0-.3 1.800V9a1.700 1.700 0 0 0 1.500 1H21a2 2 0 1 1 0 4h-.1a1.700 1.700 0 0 0-1.500 1z',
@@ -183,6 +184,7 @@ async function pageNew() {
   if (!providers) await loadMeta();
   const samples = await api('/api/samples');
   const pick = providerPicker(defaultProvider());
+  const rp = await repoPicker();
   let mode = 'diff';
   const diff = h('textarea', { id: 'diff', placeholder: 'Paste the output of `git diff` here', spellcheck: 'false', 'aria-label': 'Unified diff' });
   const url = h('input', { type: 'text', id: 'pr', placeholder: 'https://github.com/owner/repo/pull/123', 'aria-label': 'Pull request URL' });
@@ -203,7 +205,7 @@ async function pageNew() {
   setMode(samples.length ? 'sample' : 'diff');
   const run = h('button', { class: 'btn primary', type: 'button' }, 'Run review');
   run.addEventListener('click', busy(run, async () => {
-    const payload = { source: mode, ...pick.value(), rag: rag.checked };
+    const payload = { source: mode, ...pick.value(), rag: rag.checked, repo: mode === 'pr' ? null : rp.value() };
     if (mode === 'diff') payload.diff = diff.value;
     if (mode === 'pr') payload.pr_url = url.value;
     if (mode === 'sample') payload.sample = sample.value;
@@ -217,6 +219,7 @@ async function pageNew() {
       h('div', { class: 'card card-pad' }, h('h2', {}, 'Settings'),
         h('div', { class: 'field' }, h('label', { for: 'provider' }, 'Reviewer'), pick.sel, pick.note),
         h('div', { class: 'field' }, h('label', { for: 'model' }, 'Model'), pick.model, pick.dl),
+        h('div', { class: 'field' }, h('label', {}, 'Repository context'), rp.sel, h('div', { class: 'hint' }, 'For pasted diffs and samples. A pull request URL fetches its own repository.')),
         h('label', { class: 'check', for: 'rag', style: 'margin-bottom:16px' }, rag,
           h('span', {}, h('b', {}, 'Use repository context (RAG)'), h('div', { class: 'hint' }, `Retrieves related code from ${config.repo_root}/ so the model sees helpers and conventions, not just the diff.`))),
         run)));
@@ -330,50 +333,17 @@ async function pageReview(id) {
           h('div', { class: 'list', style: 'margin-top:8px' }, Object.entries(skipped).map(([p, why]) => h('div', {}, h('code', {}, p), h('span', { class: 'hint' }, why))))) : null)));
 }
 
-async function pageEval() {
-  if (!providers) await loadMeta();
-  const runs = await api('/api/eval');
-  const pick = providerPicker(providers.find((p) => p.id !== 'rules' && p.available) ? defaultProvider() : 'rules');
-  const run = h('button', { class: 'btn primary' }, 'Run evaluation');
-  run.addEventListener('click', busy(run, async () => {
-    try { await api('/api/eval', { method: 'POST', body: pick.value() }); toast('Evaluation complete'); render(); }
-    catch (e) { toast(e.message, true); }
-  }));
-  const view = h('div', {}, h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Evaluation'),
-    h('p', { class: 'sub' }, 'Score a reviewer on seeded-bug diffs with known answers. A finding is a hit if it lands within 2 lines of a planted bug.')),
-    h('div', { class: 'row' }, h('div', { style: 'width:210px' }, pick.sel), h('div', { style: 'width:190px' }, pick.model), pick.dl, run)),
-    h('p', { class: 'hint', style: 'margin-top:-8px' }, pick.note));
-  if (!runs.length) { view.append(emptyState('No evaluation runs yet', 'Run the evaluation to compare reviewers. Start with the offline baseline, then try a real model.')); return view; }
-  const latest = new Map();
-  runs.forEach((r) => { const k = r.provider + '|' + r.model; if (!latest.has(k)) latest.set(k, r); });
-  view.append(h('div', { class: 'card card-pad', style: 'margin-bottom:16px' }, h('h2', {}, 'Latest run per reviewer'),
-    h('div', { class: 'barlist' }, [...latest.values()].map((r) => h('div', {},
-      h('div', { class: 'row', style: 'margin-bottom:4px' }, h('b', {}, r.provider + (r.model ? ' / ' + r.model : '')), h('span', { class: 'hint' }, `${r.false_positives} false positive(s) · ${ago(r.created_at)}`)),
-      ...[['Precision', r.precision], ['Recall', r.recall]].map(([l, v]) => h('div', { class: 'bar-row', style: 'grid-template-columns:80px minmax(0,1fr) 44px' }, h('span', {}, l),
-        h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: `width:${(v || 0) * 100}%` })), h('span', { class: 'v' }, pct(v)))))))));
-  const sel = runs[0];
-  view.append(h('div', { class: 'card' }, h('div', { class: 'card-pad', style: 'padding-bottom:4px' }, h('h2', {}, `Cases from the latest run (${sel.provider}${sel.model ? ' / ' + sel.model : ''})`)),
-    h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ...['Case', 'Planted bug', 'Reviewer found', 'Result'].map((c) => h('th', {}, c)))),
-      h('tbody', {}, sel.cases.map((c) => {
-        const trap = c.expected === 0;
-        const ok = trap ? c.findings === 0 : c.matched === c.expected && c.findings === c.true_positive_findings;
-        const label = trap ? (c.findings === 0 ? 'Clean' : 'False alarm') : (c.matched ? (ok ? 'Found' : 'Found + extra') : 'Missed');
-        return h('tr', {}, h('td', {}, h('b', {}, c.name.replace(/_/g, ' '))), h('td', { class: 'hint' }, c.expected_desc), h('td', { class: 'hint' }, c.found_desc),
-          h('td', {}, h('span', { class: 'badge ' + (ok ? 'ok' : trap ? 'high' : c.matched ? 'medium' : 'critical') }, label)));
-      }))))));
-  return view;
-}
-
 async function pageAsk() {
   if (!providers) await loadMeta();
   const pick = providerPicker(defaultProvider());
+  const rp = await repoPicker();
   const q = h('input', { type: 'search', placeholder: 'e.g. How should I run a database query safely?', 'aria-label': 'Question', style: 'flex:1;min-width:240px' });
   const out = h('div', { style: 'margin-top:16px' });
   const go = h('button', { class: 'btn primary' }, 'Ask');
   const doAsk = busy(go, async () => {
     out.replaceChildren(skeleton(3));
     try {
-      const r = await api('/api/ask', { method: 'POST', body: { question: q.value, ...pick.value() } });
+      const r = await api('/api/ask', { method: 'POST', body: { question: q.value, ...pick.value(), repo: rp.value() } });
       out.replaceChildren(h('div', {},
         r.error ? h('div', { class: 'banner err' }, r.error) : null,
         r.answer ? h('div', { class: 'card card-pad' }, h('h2', {}, 'Answer'), h('div', { class: 'answer' }, r.answer)) : null,
@@ -384,8 +354,8 @@ async function pageAsk() {
   go.addEventListener('click', doAsk);
   q.addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
   return h('div', {}, h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ask the repository'),
-    h('p', { class: 'sub' }, `Retrieval-augmented Q&A over ${config.repo_root}/. With the offline reviewer you see only the retrieved code, which is exactly what a model would receive as context.`))),
-    h('div', { class: 'card card-pad' }, h('div', { class: 'row' }, q, h('div', { style: 'width:200px' }, pick.sel), h('div', { style: 'width:180px' }, pick.model), pick.dl, go), h('div', { class: 'hint', style: 'margin-top:8px' }, pick.note)),
+    h('p', { class: 'sub' }, 'Retrieval-augmented Q&A over the selected repository: the most relevant code is retrieved, then a model answers with citations. Choose a connected GitHub repository, or the bundled sample.'))),
+    h('div', { class: 'card card-pad' }, h('div', { class: 'row' }, q, h('div', { style: 'width:220px' }, rp.sel), h('div', { style: 'width:190px' }, pick.sel), h('div', { style: 'width:180px' }, pick.model), pick.dl, go), h('div', { class: 'hint', style: 'margin-top:8px' }, pick.note)),
     out);
 }
 
@@ -409,8 +379,280 @@ async function pageSettings() {
           h('div', {}, h('span', {}, 'Sample data'), h('button', { class: 'btn small danger', onclick: async () => { await api('/api/demo', { method: 'DELETE' }); toast('Sample reviews removed'); } }, 'Remove sample reviews'))))));
 }
 
+/* ---------- repositories ---------- */
+let selectedRepo = (() => { try { return sessionStorage.getItem('cw_repo') || '_default'; } catch (_) { return '_default'; } })();
+function setRepo(slug) { selectedRepo = slug; try { sessionStorage.setItem('cw_repo', slug); } catch (_) { /* storage unavailable */ } }
+async function repoPicker() {
+  const data = await api('/api/repos');
+  const all = [{ slug: '_default', label: `Bundled sample repository (${data.default.repo})` }, ...data.connected.map((r) => ({ slug: r.slug, label: `${r.owner}/${r.repo}` }))];
+  if (!all.some((r) => r.slug === selectedRepo)) setRepo('_default');
+  const sel = h('select', { 'aria-label': 'Repository context' }, all.map((r) => h('option', { value: r.slug, selected: r.slug === selectedRepo }, r.label)));
+  sel.addEventListener('change', () => setRepo(sel.value));
+  return { sel, value: () => (sel.value === '_default' ? null : sel.value), data };
+}
+
+async function pageRepos() {
+  if (!providers) await loadMeta();
+  const data = await api('/api/repos');
+  const pick = providerPicker(defaultProvider());
+  const url = h('input', { type: 'text', placeholder: 'https://github.com/owner/repo', 'aria-label': 'GitHub repository URL', style: 'flex:1;min-width:260px' });
+  const connect = h('button', { class: 'btn primary' }, 'Connect repository');
+  const doConnect = busy(connect, async () => {
+    try { const r = await api('/api/repos', { method: 'POST', body: { url: url.value } }); setRepo(r.slug); toast(`Connected ${r.owner}/${r.repo} (${r.files} files indexed)`); render(); }
+    catch (e) { toast(e.message, true); }
+  });
+  connect.addEventListener('click', doConnect);
+  url.addEventListener('keydown', (e) => { if (e.key === 'Enter') connect.click(); });
+
+  async function showPulls(r) {
+    modal(`Pull requests: ${r.owner}/${r.repo}`, skeleton(3));
+    try {
+      const pulls = await api(`/api/repos/${r.slug}/pulls`);
+      const body = $('#modal .modal-body');
+      body.replaceChildren(pulls.length ? h('div', { class: 'list' }, pulls.map((p) => {
+        const go = h('button', { class: 'btn small primary' }, 'Review');
+        go.addEventListener('click', busy(go, async () => {
+          try { const rv = await api('/api/reviews', { method: 'POST', body: { source: 'pr', pr_url: p.url, ...pick.value(), rag: true } }); $('#modal').close(); location.hash = '#/reviews/' + rv.id; }
+          catch (e) { toast(e.message, true); }
+        }));
+        return h('div', {}, h('div', { style: 'min-width:0' }, h('div', {}, h('b', {}, `#${p.number} `), p.title), h('div', { class: 'hint' }, `${p.author} · ${p.state} · ${ago(Date.parse(p.updated_at) / 1000)}`)), go);
+      })) : h('p', {}, 'This repository has no pull requests.'));
+    } catch (e) { $('#modal .modal-body').replaceChildren(h('div', { class: 'banner err' }, e.message)); }
+  }
+
+  const rows = [{ slug: '_default', owner: 'bundled', repo: data.default.repo, branch: '-', head: '-', last_commit: 'Sample repository used by the demo pull requests', files: data.default.files, size_mb: null }, ...data.connected];
+  return h('div', {},
+    h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Repositories'), h('p', { class: 'sub' }, 'Connect a public GitHub repository. CodeWarden clones it, indexes it for retrieval, and reviews its pull requests with real surrounding code as context.'))),
+    h('div', { class: 'card card-pad', style: 'margin-bottom:16px' }, h('h2', {}, 'Connect a repository'),
+      h('div', { class: 'row' }, url, connect), h('div', { class: 'hint', style: 'margin-top:8px' }, 'Public repositories only. Shallow clone, size limit 400 MB, no code from the repository is ever executed.')),
+    h('div', { class: 'card' }, h('div', { class: 'card-pad row', style: 'padding-bottom:4px' }, h('h2', { style: 'margin:0' }, 'Indexed repositories'), h('span', { class: 'spacer' }),
+      h('div', { style: 'width:230px' }, pick.sel), h('div', { style: 'width:170px' }, pick.model), pick.dl),
+      h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ...['Repository', 'Revision', 'Files', 'Size', ''].map((c) => h('th', {}, c)))),
+        h('tbody', {}, rows.map((r) => h('tr', {},
+          h('td', {}, h('b', {}, r.slug === '_default' ? r.repo : `${r.owner}/${r.repo}`), h('div', { class: 'hint' }, r.last_commit)),
+          h('td', { class: 'mono' }, r.slug === '_default' ? 'sample' : `${r.branch}@${r.head}`),
+          h('td', { class: 'num' }, r.files), h('td', { class: 'num' }, r.size_mb == null ? '-' : r.size_mb + ' MB'),
+          h('td', {}, h('div', { class: 'row', style: 'justify-content:flex-end' },
+            r.slug === '_default' ? null : h('button', { class: 'btn small', onclick: () => showPulls(r) }, 'Pull requests'),
+            h('button', { class: 'btn small', onclick: () => { setRepo(r.slug); location.hash = '#/ask'; } }, 'Ask'),
+            r.slug === '_default' ? null : h('button', { class: 'btn small danger', onclick: async () => { if (confirm(`Remove ${r.owner}/${r.repo}?`)) { await api('/api/repos/' + r.slug, { method: 'DELETE' }); setRepo('_default'); render(); } } }, 'Remove')))))))),
+      h('div', { class: 'card-pad hint' }, pick.note)));
+}
+
+/* ---------- experiment ---------- */
+const METRIC_NOTE = 'A finding is a true positive when it is in the same file within 2 lines of a planted bug. Precision = true-positive findings / all findings. Recall = planted bugs found / planted bugs. F1 is their harmonic mean. Intervals are 95% Wilson score intervals.';
+function pctText(v) { return v == null ? 'n/a' : Math.round(v * 100) + '%'; }
+function ciText(ci) { return ci ? `${Math.round(ci[0] * 100)}-${Math.round(ci[1] * 100)}%` : ''; }
+function overlap(a, b) { return a && b && a[0] <= b[1] && b[0] <= a[1]; }
+function sysLabel(res, id) { return (res.systems.find((s) => s.id === id) || { label: id }).label; }
+
+function groupedBars(res, suite) {
+  const ids = res.systems.map((s) => s.id).filter((id) => res.metrics[`${id}|${suite}`]);
+  if (!ids.length) return null;
+  const W = 720, H = 250, L = 40, B = 58, T = 14, slot = (W - L - 10) / ids.length;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `Precision, recall and F1 per system on the ${suite} suite`);
+  svg.style.cssText = 'width:100%;height:auto;max-width:760px';
+  const el = (tag, attrs, text) => { const e = document.createElementNS(ns, tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; svg.append(e); return e; };
+  [0, .25, .5, .75, 1].forEach((g) => {
+    const y = T + (H - T - B) * (1 - g);
+    el('line', { x1: L, x2: W - 6, y1: y, y2: y, class: 'grid' }); el('text', { x: L - 6, y: y + 4, 'text-anchor': 'end', class: 'axis' }, Math.round(g * 100) + '%');
+  });
+  ids.forEach((id, i) => {
+    const m = res.metrics[`${id}|${suite}`];
+    const bw = Math.min(slot * 0.23, 40), x0 = L + i * slot + (slot - 3 * bw - 6) / 2;
+    [['precision', 'bar-p'], ['recall', 'bar-r'], ['f1', 'bar-f']].forEach(([k, cls], j) => {
+      const v = m[k] == null ? 0 : m[k], hgt = (H - T - B) * v, x = x0 + j * (bw + 3);
+      el('rect', { x, y: T + (H - T - B) - hgt, width: bw, height: Math.max(hgt, 1), class: cls, rx: 2 });
+      el('text', { x: x + bw / 2, y: T + (H - T - B) - hgt - 4, 'text-anchor': 'middle', class: 'val' }, m[k] == null ? 'n/a' : Math.round(v * 100));
+    });
+    const words = sysLabel(res, id).split(/,\s| \+ /);
+    words.forEach((w, k) => el('text', { x: L + i * slot + slot / 2, y: H - B + 18 + k * 13, 'text-anchor': 'middle', class: 'axis' }, k && words.length > 1 ? (sysLabel(res, id).includes(' + ') && k === words.length - 1 ? '+ ' + w : w) : w));
+  });
+  return svg;
+}
+
+function interpretation(res) {
+  const out = [], M = res.metrics, get = (id, s) => M[`${id}|${s}`];
+  const base = get('rules', 'general');
+  [...new Set(res.systems.filter((s) => s.provider !== 'rules').map((s) => s.provider))].forEach((p) => {
+    const diff = get(p + '-diff', 'general'), cd = get(p + '-diff', 'context'), cr = get(p + '-rag', 'context');
+    const name = sysLabel(res, p + '-diff').replace(', diff only', '');
+    if (base && diff) {
+      out.push(`General suite: ${name} found ${diff.matched} of ${diff.expected} planted bugs (recall ${pctText(diff.recall)}, precision ${pctText(diff.precision)}) against ${base.matched} of ${base.expected} for the regex baseline (recall ${pctText(base.recall)}, precision ${pctText(base.precision)}).` +
+        (overlap(diff.recall_ci, base.recall_ci) ? ' The recall intervals overlap, so this difference is not established at this sample size.' : ''));
+    }
+    if (cd && cr) {
+      const d = Math.round((cr.recall - cd.recall) * 100);
+      out.push(`Context suite: with repository context ${name} found ${cr.matched} of ${cr.expected} context-dependent bugs, versus ${cd.matched} of ${cd.expected} without it (change in recall ${d >= 0 ? '+' : ''}${d} points). False positives: ${cr.false_positives} with context, ${cd.false_positives} without.` +
+        (overlap(cr.recall_ci, cd.recall_ci) ? ' The recall intervals overlap, so treat this as suggestive rather than conclusive.' : ' The recall intervals do not overlap.'));
+    }
+  });
+  const bc = get('rules', 'context');
+  if (bc) out.push(`The regex baseline found ${bc.matched} of ${bc.expected} context-dependent bugs: pattern matching cannot see repository conventions.`);
+  return out;
+}
+
+function csvOf(res) {
+  const rows = [['system', 'suite', 'precision', 'recall', 'f1', 'true_positives', 'false_positives', 'false_negatives', 'clean_false_alarm_rate', 'avg_latency_ms', 'tokens_prompt', 'tokens_output', 'repeats']];
+  Object.entries(res.metrics).forEach(([k, m]) => { const [id, suite] = k.split('|'); rows.push([sysLabel(res, id), suite, m.precision, m.recall, m.f1, m.true_positives, m.false_positives, m.false_negatives, m.clean_false_alarm_rate, m.avg_latency_ms, m.tokens_prompt, m.tokens_output, m.repeats]); });
+  return rows.map((r) => r.map((c) => (c == null ? '' : /[",\n]/.test(String(c)) ? '"' + String(c).replace(/"/g, '""') + '"' : c)).join(',')).join('\n');
+}
+function download(name, text, type) {
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  document.body.append(a); a.click(); a.remove();
+}
+
+function renderResults(exp) {
+  const res = exp.results;
+  const ids = res.systems.map((s) => s.id);
+  const rowsFor = (suite) => ids.filter((id) => res.metrics[`${id}|${suite}`]).map((id) => {
+    const m = res.metrics[`${id}|${suite}`];
+    const spread = m.run_to_run && m.run_to_run.recall ? ` ±${Math.round(m.run_to_run.recall[1] * 100)}` : '';
+    return h('tr', {}, h('td', {}, h('b', {}, sysLabel(res, id))),
+      h('td', { class: 'num' }, pctText(m.precision), h('div', { class: 'hint' }, ciText(m.precision_ci))),
+      h('td', { class: 'num' }, pctText(m.recall) + spread, h('div', { class: 'hint' }, ciText(m.recall_ci))),
+      h('td', { class: 'num' }, pctText(m.f1)), h('td', { class: 'num' }, `${m.matched}/${m.expected}`),
+      h('td', { class: 'num' }, m.false_positives), h('td', { class: 'num' }, m.clean_cases ? `${m.clean_false_alarms}/${m.clean_cases}` : '-'),
+      h('td', { class: 'num' }, m.avg_latency_ms < 1000 ? m.avg_latency_ms + ' ms' : (m.avg_latency_ms / 1000).toFixed(1) + ' s'),
+      h('td', { class: 'num' }, m.tokens_prompt + m.tokens_output ? (m.tokens_prompt + m.tokens_output).toLocaleString() : '-'));
+  });
+  const metricTable = (suite) => h('div', { class: 'card', style: 'margin-bottom:14px' },
+    h('div', { class: 'card-pad', style: 'padding-bottom:4px' }, h('h2', {}, `${cap(suite)} suite`), h('p', { class: 'hint', style: 'margin:-6px 0 6px' }, res.suites[suite].description + ` · ${res.suites[suite].bugs} planted bugs in ${res.suites[suite].cases} cases (${res.suites[suite].clean} clean)`)),
+    h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ...['System', 'Precision', 'Recall', 'F1', 'Bugs found', 'False positives', 'Clean-case false alarms', 'Latency / case', 'Tokens'].map((c, i) => h('th', { class: i ? 'num' : '' }, c)))), h('tbody', {}, rowsFor(suite)))),
+    h('div', { class: 'card-pad' }, h('div', { class: 'legend', style: 'margin-bottom:6px' }, h('span', {}, h('i', { style: 'background:var(--accent)' }), 'Precision'), h('span', {}, h('i', { style: 'background:var(--ok)' }), 'Recall'), h('span', {}, h('i', { style: 'background:var(--med)' }), 'F1')), groupedBars(res, suite) || ''));
+  const cell = (slot, id) => {
+    const s = slot.systems[id];
+    if (!s) return h('td', { class: 'hint' }, 'n/a');
+    if (slot.clean) return h('td', {}, s.false_alarm_runs ? h('span', { class: 'badge high' }, `false alarm ${s.false_alarm_runs}/${s.runs}`) : h('span', { class: 'badge ok' }, 'clean'));
+    const k = s.found_in, n = s.runs;
+    return h('td', {}, h('span', { class: 'badge ' + (k === n ? 'ok' : k ? 'medium' : 'critical') }, k === n ? 'found' : k ? `found ${k}/${n}` : 'missed'), s.false_alarm_runs ? h('span', { class: 'badge plain', style: 'margin-left:4px', title: 'Reported extra findings that matched no planted bug' }, `+${s.false_alarm_runs} extra`) : null);
+  };
+  const matrix = ['general', 'context'].filter((s) => res.suites[s]).map((suite) => h('div', { class: 'card', style: 'margin-bottom:14px' },
+    h('div', { class: 'card-pad', style: 'padding-bottom:4px' }, h('h2', {}, `Per-case outcomes: ${suite} suite`)),
+    h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'Case'), h('th', {}, 'Planted'), ...ids.filter((id) => res.cases.some((c) => c.suite === suite && c.systems[id])).map((id) => h('th', {}, sysLabel(res, id))))),
+      h('tbody', {}, res.cases.filter((c) => c.suite === suite).map((c) => h('tr', {}, h('td', {}, h('b', {}, c.case.replace(/_/g, ' '))), h('td', { class: 'hint' }, c.expected),
+        ...ids.filter((id) => res.cases.some((x) => x.suite === suite && x.systems[id])).map((id) => cell(c, id)))))))));
+  const failures = res.failures;
+  const fail = h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'Failure analysis'),
+    h('p', { class: 'hint', style: 'margin-top:-6px' }, `${failures.filter((f) => f.kind === 'missed').length} misses and ${failures.filter((f) => f.kind === 'false_alarm').length} false-alarm cases across all systems. Misses are bugs a system did not report; false alarms are findings that match no planted bug.`),
+    failures.length ? h('div', { class: 'list' }, failures.map((f) => h('div', { style: 'align-items:flex-start' },
+      h('div', { style: 'min-width:0' }, h('div', {}, h('span', { class: 'badge ' + (f.kind === 'missed' ? 'critical' : 'high') }, f.kind === 'missed' ? 'missed' : 'false alarm'), ' ', h('b', {}, f.case.replace(/_/g, ' ')), h('span', { class: 'hint' }, ` · ${f.suite} · ${sysLabel(res, f.system)}`)),
+        h('div', { class: 'hint' }, f.detail), f.reported.length ? h('div', { class: 'hint' }, 'Reported: ' + f.reported.join(' | ')) : h('div', { class: 'hint' }, 'Reported nothing for this case.'))))) : h('p', {}, 'No failures recorded.'));
+  const cfg = res.config;
+  const kv = (k, v) => h('div', {}, h('span', {}, k), h('span', { class: 'mono', style: 'text-align:right;word-break:break-all' }, String(v)));
+  const repro = h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'Methodology and reproducibility'),
+    h('div', { class: 'list' }, kv('Reviewer models that answered', Object.entries(cfg.models_that_answered).filter(([, m]) => m.length).map(([id, m]) => `${sysLabel(res, id)}: ${m.join(', ')}`).join(' | ') || 'regex baseline only'),
+      kv('Repetitions per case', cfg.repeats), kv('Temperature', cfg.temperature), kv('Minimum confidence', cfg.min_confidence), kv('Line tolerance', '±' + cfg.line_tolerance),
+      kv('Retrieval', `${cfg.rag.backend} over ${cfg.rag.chunker} chunks, top ${cfg.rag.top_k}`), kv('Secret redaction', cfg.redact_secrets), kv('Prompt version', cfg.prompt_hash), kv('Dataset version', cfg.dataset_hash),
+      kv('CodeWarden / git commit', `${cfg.codewarden_version} / ${cfg.git_commit || 'n/a'}`), kv('Python', cfg.python), kv('Run time', cfg.duration_s + ' s')),
+    h('p', { class: 'hint', style: 'margin:12px 0 4px' }, 'Reproduce from a terminal:'), h('pre', { class: 'pre', style: 'max-height:none' }, cfg.command),
+    h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: () => download(`codewarden-experiment-${exp.id}.json`, JSON.stringify(res, null, 2), 'application/json') }, 'Download JSON'),
+      h('button', { class: 'btn', onclick: () => download(`codewarden-experiment-${exp.id}.csv`, csvOf(res), 'text/csv') }, 'Download CSV')));
+  const notes = interpretation(res);
+  return h('div', {},
+    h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'What the data shows'),
+      notes.length ? h('ul', { style: 'margin:0;padding-left:18px;display:grid;gap:8px' }, notes.map((n) => h('li', {}, n))) : h('p', {}, 'Run at least one language model to compare it with the baseline.'),
+      h('p', { class: 'hint', style: 'margin-bottom:0' }, 'These sentences are generated from the numbers below. Interpret them against the limitations section.')),
+    metricTable('general'), res.suites.context ? metricTable('context') : null, h('div', { class: 'card card-pad hint', style: 'margin-bottom:14px' }, METRIC_NOTE), ...matrix, fail, repro);
+}
+
+async function pageExperiment() {
+  if (!providers) await loadMeta();
+  const [meta, exps] = await Promise.all([api('/api/experiment/meta'), api('/api/experiments')]);
+  const results = h('div', {});
+  const boxes = {};
+  const status = meta.systems;
+  const checks = h('div', { class: 'list' }, [{ id: 'rules', label: 'Regex baseline', detail: 'Pattern matching only; the control group', available: true, fixed: true },
+    ...status.filter((p) => p.id !== 'rules')].map((p) => {
+    const cb = h('input', { type: 'checkbox', id: 'sys-' + p.id, checked: p.available, disabled: !p.available || p.fixed });
+    boxes[p.id] = cb;
+    return h('label', { class: 'check', for: 'sys-' + p.id, style: 'padding:8px 0;border-bottom:1px solid var(--border)' }, cb,
+      h('span', {}, h('b', {}, p.label + (p.models && p.models[0] && p.id === 'ollama' ? ` · ${p.models[0]}` : '')), h('div', { class: 'hint' }, p.available ? p.detail : p.detail + ' (unavailable)')));
+  }));
+  const reps = h('select', { id: 'repeats', 'aria-label': 'Repetitions' }, [1, 3, 5].map((n) => h('option', { value: n }, n === 1 ? '1 run' : `${n} runs`)));
+  const est = h('div', { class: 'hint' });
+  const updateEst = () => {
+    const n = Object.entries(boxes).filter(([id, b]) => id !== 'rules' && b.checked).length;
+    est.textContent = n ? `About ${n * meta.calls_per_repeat_per_model * Number(reps.value)} model calls. Hosted models may be rate limited.` : 'Baseline only: no model calls.';
+  };
+  reps.addEventListener('change', updateEst); Object.values(boxes).forEach((b) => b.addEventListener('change', updateEst)); updateEst();
+  const run = h('button', { class: 'btn primary' }, 'Run experiment');
+  const progress = h('div', { hidden: true, style: 'margin-top:14px' });
+  let timer = null;
+
+  function showExp(exp) {
+    results.replaceChildren(exp && exp.results ? renderResults(exp) : h('div', { class: 'card' }, h('div', { class: 'empty' }, h('h2', {}, 'No results yet'), h('p', {}, 'Run the experiment above. The baseline alone takes a few seconds.'))));
+  }
+  async function poll(id) {
+    clearInterval(timer);
+    const tick = async () => {
+      let exp;
+      try { exp = await api('/api/experiments/' + id); } catch (_) { return; }
+      progress.hidden = false;
+      if (exp.status === 'running') {
+        progress.replaceChildren(h('div', { class: 'row' }, h('span', { class: 'spin' }), h('b', {}, `${exp.done} of ${exp.total}`), h('span', { class: 'hint' }, exp.label)),
+          h('div', { class: 'bar-track', style: 'margin-top:8px' }, h('div', { class: 'bar-fill', style: `width:${exp.total ? (exp.done / exp.total) * 100 : 0}%` })));
+      } else {
+        clearInterval(timer); run.disabled = false;
+        if (exp.status === 'failed') { progress.replaceChildren(h('div', { class: 'banner err' }, h('b', {}, 'Experiment failed: '), exp.error, h('div', { class: 'hint' }, 'Nothing was recorded, so no partial numbers can mislead you.'))); }
+        else { progress.hidden = true; refreshPicker(exp.id); }
+      }
+    };
+    timer = setInterval(tick, 1500); tick();
+  }
+  const picker = h('select', { 'aria-label': 'Experiment run' });
+  const pickerWrap = h('div', { class: 'row', style: 'margin-bottom:12px' }, h('b', {}, 'Results'), h('span', { class: 'spacer' }), picker);
+  async function refreshPicker(selectId) {
+    const list = (await api('/api/experiments')).filter((e) => e.status === 'done');
+    picker.replaceChildren(...list.map((e) => h('option', { value: e.id, selected: e.id === selectId }, `Run #${e.id} · ${new Date(e.created_at * 1000).toLocaleString()} · ${e.plan.providers.join(' + ')} × ${e.plan.repeats}`)));
+    pickerWrap.hidden = !list.length;
+    if (list.length) { const exp = await api('/api/experiments/' + (selectId || list[0].id)); showExp(exp); } else showExp(null);
+  }
+  picker.addEventListener('change', async () => showExp(await api('/api/experiments/' + picker.value)));
+  run.addEventListener('click', async () => {
+    const providers_ = ['rules', ...Object.entries(boxes).filter(([id, b]) => id !== 'rules' && b.checked).map(([id]) => id)];
+    run.disabled = true;
+    try { const exp = await api('/api/experiments', { method: 'POST', body: { providers: providers_, repeats: Number(reps.value) } }); poll(exp.id); }
+    catch (e) { run.disabled = false; toast(e.message, true); }
+  });
+
+  const kvrow = (k, v) => h('div', {}, h('span', {}, k), h('span', { class: 'mono' }, v));
+  const view = h('div', {},
+    h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Experiment'), h('p', { class: 'sub' }, 'A controlled comparison of review systems on labelled data, with a baseline, confidence intervals and failure analysis.'))),
+    h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'Research question'),
+      h('p', { style: 'margin:0 0 10px;font-size:15px' }, h('b', {}, 'Does giving an LLM reviewer retrieved repository context improve its ability to find bugs in pull requests, compared with reviewing the diff alone and with a pattern-matching baseline?')),
+      h('div', { class: 'grid-2' },
+        h('div', {}, h('div', { class: 'label' }, 'Hypotheses'), h('ol', { style: 'margin:6px 0 0;padding-left:18px;display:grid;gap:6px' },
+          h('li', {}, h('b', {}, 'H1. '), 'An LLM reviewer has higher recall than the regex baseline on bugs that are visible in the diff.'),
+          h('li', {}, h('b', {}, 'H2. '), 'Adding repository context raises recall on context-dependent bugs without raising the false-alarm rate.'),
+          h('li', {}, h('b', {}, 'H3 (exploratory). '), 'A small local model gives up accuracy for lower latency and no data leaving the machine.'))),
+        h('div', {}, h('div', { class: 'label' }, 'Design'), h('div', { class: 'list' },
+          kvrow('Independent variable', 'review system (baseline, diff-only, +RAG)'), kvrow('Dependent variables', 'precision, recall, F1, false alarms, latency, tokens'),
+          kvrow('Held constant', 'prompt, temperature, datasets, scoring'), kvrow('Baseline', 'regex rules (control)'), kvrow('Ablation', 'same model with and without retrieval'))))),
+    h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'Datasets'),
+      h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ...['Suite', 'What it tests', 'Cases', 'Planted bugs', 'Clean cases'].map((c) => h('th', {}, c)))),
+        h('tbody', {}, ...Object.entries(meta.suites).map(([n, s]) => h('tr', {}, h('td', {}, h('b', {}, cap(n))), h('td', { class: 'hint' }, n === 'general' ? 'Bugs visible in the diff alone: SQL injection, XSS, secrets, off-by-one, races, leaks, missing auth, path traversal, N+1' : 'Bugs that are only wrong given the repository: helper signatures, conventions, missing login checks'), h('td', { class: 'num' }, s.cases), h('td', { class: 'num' }, s.bugs), h('td', { class: 'num' }, s.clean)))))),
+      h('p', { class: 'hint', style: 'margin-bottom:0' }, `Each case is a unified diff with an expected file and line. Dataset ${meta.dataset_hash} · prompt ${meta.prompt_hash} · retrieval ${meta.rag.backend} / ${meta.rag.chunker}, top ${meta.rag.top_k} · temperature ${meta.temperature}.`)),
+    h('div', { class: 'card card-pad', style: 'margin-bottom:18px' }, h('h2', {}, 'Run'), h('div', { class: 'grid-2' }, h('div', {}, checks), h('div', {}, h('div', { class: 'field' }, h('label', { for: 'repeats' }, 'Repetitions'), reps, h('div', { class: 'hint' }, 'Model output varies between runs. Repeating gives a run-to-run spread.')), est, h('div', { style: 'margin-top:12px' }, run))), progress),
+    pickerWrap, results,
+    h('div', { class: 'card card-pad' }, h('h2', {}, 'Limitations and threats to validity'),
+      h('ul', { style: 'margin:0;padding-left:18px;display:grid;gap:7px' },
+        h('li', {}, h('b', {}, 'Small, synthetic datasets. '), `${Object.values(meta.suites).reduce((n, s) => n + s.bugs, 0)} planted bugs is too few for narrow confidence intervals, and synthetic bugs are cleaner than real ones.`),
+        h('li', {}, h('b', {}, 'Author bias. '), 'The datasets and the regex baseline were written by the same team, so the baseline is not independently tuned and the cases may favour whatever the authors expected to be hard.'),
+        h('li', {}, h('b', {}, 'Non-determinism. '), 'LLM output varies between runs. A single run can mislead; use repeated runs and the reported intervals.'),
+        h('li', {}, h('b', {}, 'Scoring rule. '), 'A finding is credited if it lands within 2 lines of the planted bug. A correct finding about a different, unplanted real bug counts as a false positive.'),
+        h('li', {}, h('b', {}, 'Moving targets. '), 'Hosted models change and may fall back to another model under load; the models that actually answered are recorded with each run.'),
+        h('li', {}, h('b', {}, 'Retrieval confound. '), 'Context adds tokens as well as information. A gain from retrieval could partly reflect longer prompts rather than the specific code retrieved.'),
+        h('li', {}, h('b', {}, 'Scope. '), 'Mostly Python, one small repository for the context suite, no human reviewer study.'))));
+  (async () => { const done = exps.filter((e) => e.status === 'done'); const running = exps.find((e) => e.status === 'running'); await refreshPicker(done[0] && done[0].id); if (running) { run.disabled = true; poll(running.id); } })();
+  return view;
+}
+
 /* ---------- router ---------- */
-const NAV = [['#/', 'Overview', 'grid'], ['#/new', 'New review', 'plus'], ['#/eval', 'Evaluation', 'flask'], ['#/ask', 'Ask the repo', 'search'], ['#/settings', 'Settings', 'gear']];
+const NAV = [['#/', 'Overview', 'grid'], ['#/new', 'New review', 'plus'], ['#/repos', 'Repositories', 'repo'], ['#/experiment', 'Experiment', 'flask'], ['#/ask', 'Ask the repo', 'search'], ['#/settings', 'Settings', 'gear']];
 function drawNav() {
   const cur = location.hash.startsWith('#/reviews/') ? '#/' : (location.hash || '#/');
   $('#nav').replaceChildren(...NAV.map(([href, label, ic]) => h('a', { href, 'aria-current': href === cur ? 'page' : false }, icon(ic), label)));
@@ -426,7 +668,8 @@ async function render() {
     let page;
     if (hash === '#/') page = await pageOverview();
     else if (hash === '#/new') page = await pageNew();
-    else if (hash === '#/eval') page = await pageEval();
+    else if (hash === '#/experiment' || hash === '#/eval') page = await pageExperiment();
+    else if (hash === '#/repos') page = await pageRepos();
     else if (hash === '#/ask') page = await pageAsk();
     else if (hash === '#/settings') page = await pageSettings();
     else if (/^#\/reviews\/\d+$/.test(hash)) page = await pageReview(hash.split('/')[2]);

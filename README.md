@@ -20,7 +20,7 @@ PR opened/updated -> GitHub Action / webhook / dashboard -> fetch diff -> parse 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[web,langchain,dev]"
-pytest -q                 # 82 tests
+pytest -q                 # 93 tests
 codewarden demo           # dashboard at http://127.0.0.1:8765 with demo PRs pre-reviewed
 ```
 
@@ -30,7 +30,9 @@ A step-by-step presentation script is in [docs/DEMO.md](docs/DEMO.md).
 
 | Feature | Where |
 |---|---|
-| Web dashboard: history, stats, annotated diffs, evaluation, repo Q&A | `codewarden serve` / `codewarden demo` |
+| Web dashboard: history, stats, annotated diffs, repo Q&A | `codewarden serve` / `codewarden demo` |
+| **Experiment**: baseline vs LLM vs LLM+RAG on labelled data, with confidence intervals, per-case outcomes, failure analysis and a reproducibility record | dashboard **Experiment**, `codewarden experiment` |
+| **Connect a public GitHub repository**: shallow clone, index for RAG, browse and review its pull requests | dashboard **Repositories** |
 | Review a local diff or branch | `codewarden review --base main` |
 | Review a GitHub PR by URL (public repos work without a token) | dashboard **New review -> GitHub PR** |
 | GitHub Action + signature-verified webhook receiver | `action.yml`, `/webhook/github` |
@@ -38,7 +40,7 @@ A step-by-step presentation script is in [docs/DEMO.md](docs/DEMO.md).
 | Ask-the-repo Q&A with citations | dashboard **Ask the repo**, `codewarden ask` |
 | One-line auto-fix suggestions (posted as GitHub `suggestion` blocks) | `replacement` field in findings |
 | Unit-test generation for changed code | dashboard **Generate tests**, `codewarden testgen` |
-| Evaluation harness (precision/recall on seeded bugs) | `codewarden eval`, dashboard **Evaluation** |
+| Quick precision/recall check on the seeded-bug cases | `codewarden eval` |
 | Secret redaction, prompt-injection defence, dedupe across pushes | `redact.py`, `prompts.py`, `report.py` |
 
 ## Models
@@ -147,25 +149,39 @@ Environment overrides: `CODEWARDEN_PROVIDER`, `CODEWARDEN_MODEL`, `CODEWARDEN_EX
 | Models | Gemini only | Gemini, local Ollama models, offline baseline |
 | Visibility | Actions log | dashboard with history, stats and annotated diffs |
 | Quality measurement | none | seeded-bug evaluation harness |
-| Tests | none | 82 offline tests |
+| Tests | none | 93 offline tests |
 
-## Evaluation
+## Experiment
 
-`eval/cases/` holds 12 diffs: ten with one planted bug each (SQL injection, hard-coded secret, off-by-one, swallowed exception, N+1 query, XSS, missing auth check, path traversal, race condition, resource leak), one clean file, and one safe-but-scary "trap" that tempts false alarms. Each has an `.expected.json` with the true location.
+**Research question:** does giving an LLM reviewer retrieved repository context improve its ability to find bugs in pull requests, compared with reviewing the diff alone and with a pattern-matching baseline?
 
-Baseline (`rules`, regexes only): **precision 86%, recall 60%, 1 false positive**. It finds pattern bugs and is blind to logic and authorisation bugs, which is the gap a language model is supposed to close. Run `codewarden eval --provider gemini` or `--provider ollama` (or use the dashboard) to measure that. The set is small and was written by the same author as the baseline rules, so treat the numbers as a sanity check, not a benchmark.
+| | |
+|---|---|
+| Systems | regex baseline; each model *diff-only*; the same model *+ RAG* (ablation) |
+| Datasets | **general** (`eval/cases`): 12 diffs, 10 planted bugs visible in the diff, 2 clean. **context** (`eval/context_cases`): 7 diffs against `demo/shop`, 6 planted bugs that are only bugs given the repository's helpers and conventions, 1 clean |
+| Metrics | precision, recall, F1 (95% Wilson intervals), clean-case false-alarm rate, latency, tokens, per-category recall; run-to-run spread over repeated runs |
+| Scoring | a finding is a true positive if it is in the same file within 2 lines of a planted bug |
+| Records | prompt hash, dataset hash, git commit, models that actually answered, temperature, retrieval settings, exact reproduction command |
+
+```bash
+codewarden experiment --providers rules,gemini,ollama --repeats 3 --out results.json
+```
+
+or use the dashboard **Experiment** page, which also shows the per-case outcome matrix, a failure analysis and a limitations section. A failed model call aborts the run and nothing is recorded, so a partial or empty result can never be mistaken for a measurement.
+
+The datasets are small and were written by the same team as the baseline, so treat the numbers as evidence for this setup, not a benchmark. The dashboard states the threats to validity next to the results.
 
 ## Status
 
-**Verified** (82 offline tests with HTTP mocked, run on Python 3.14): diff parser, pipeline, filters, dedupe, redaction, retry logic, BM25 retrieval, LangChain chunker and retriever adapter, request/response shapes for Gemini and Ollama, CLI, Action flow, GitHub posting logic, the dashboard API (auth, validation, webhook signatures, storage), and the web UI in a real browser (desktop, mobile, dark mode) using the offline provider.
+**Verified** (93 offline tests with HTTP mocked, run on Python 3.14): diff parser, pipeline, filters, dedupe, redaction, retry logic, BM25 retrieval, LangChain chunker and retriever adapter, request/response shapes for Gemini and Ollama, CLI, Action flow, GitHub posting logic, the dashboard API (auth, validation, webhook signatures, storage), and the web UI in a real browser (desktop, mobile, dark mode) using the offline provider.
 
-**Not verified against live services:** real Gemini/Ollama output quality, the Chroma backend, posting to the real GitHub API, the Docker image, Python 3.10/3.12 (CI is configured for them). Do a first run on a throwaway repository before relying on it.
+**Run for real on this machine:** Gemini (live API), Ollama with Qwen2.5-Coder, ChromaDB with LangChain chunking, and cloning/indexing public GitHub repositories. **Not verified:** posting reviews to the real GitHub API, the Docker image (no Docker daemon was running), Python 3.10/3.12 (CI is configured for them). Do a first run on a throwaway repository before relying on it.
 
 ## Roadmap (course phases)
 
 1. **Phase 1:** done: diff parsing, prompt design, model comparison via Ollama/Gemini, CLI.
 2. **Phase 2:** done: RAG with LangChain chunking, Q&A, GitHub Actions, test generation, auto-fix suggestions. Not integrated: Sweep.dev, CodiumAI/Codeium, Sourcegraph (external services; their capabilities are reimplemented here).
-3. **Phase 3:** run the evaluation with real models, enlarge the case set, RAG on/off comparison, per-language prompts, ethics/limitations write-up.
+3. **Phase 3:** the experiment, RAG on/off ablation and failure analysis are implemented; remaining work is a larger and more realistic case set, a larger local model, and a human-reviewer comparison.
 
 ## Limitations
 

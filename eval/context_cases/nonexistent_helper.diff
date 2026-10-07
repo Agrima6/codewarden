@@ -1,0 +1,13 @@
+diff --git a/app/profile.py b/app/profile.py
+new file mode 100644
+index 0000000..a1a4361
+--- /dev/null
++++ b/app/profile.py
+@@ -0,0 +1,7 @@
++from app.auth import check_login
++from app.db import run_query
++
++
++def get_profile(request):
++    user = check_login(request)
++    return run_query("SELECT name, email FROM users WHERE id = ?", (user.id,))

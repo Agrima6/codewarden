@@ -40,6 +40,17 @@ CREATE TABLE IF NOT EXISTS findings (
     confidence REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_findings_review ON findings(review_id);
+CREATE TABLE IF NOT EXISTS experiments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at REAL NOT NULL,
+    status TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    done INTEGER NOT NULL DEFAULT 0,
+    total INTEGER NOT NULL DEFAULT 0,
+    error TEXT NOT NULL DEFAULT '',
+    plan_json TEXT NOT NULL,
+    results_json TEXT
+);
 CREATE TABLE IF NOT EXISTS eval_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at REAL NOT NULL,
@@ -167,3 +178,45 @@ class Store:
     def list_evals(self, limit: int = 20) -> list[dict]:
         rows = self._db.execute("SELECT * FROM eval_runs ORDER BY created_at DESC, id DESC LIMIT ?", (limit,)).fetchall()
         return [{**{k: r[k] for k in r.keys() if k != "cases_json"}, "cases": json.loads(r["cases_json"])} for r in rows]
+
+    # ---- experiments ----------------------------------------------------------------------
+    def create_experiment(self, plan: dict, total: int) -> int:
+        with self._lock, self._db:
+            return self._db.execute(
+                "INSERT INTO experiments (created_at, status, total, plan_json) VALUES (?,?,?,?)",
+                (time.time(), "running", total, json.dumps(plan))).lastrowid
+
+    def update_experiment(self, exp_id: int, **fields) -> None:
+        allowed = {"status", "label", "done", "total", "error"}
+        cols = [k for k in fields if k in allowed]
+        vals = [fields[k] for k in cols]
+        if "results" in fields:
+            cols.append("results_json")
+            vals.append(json.dumps(fields["results"]))
+        with self._lock, self._db:
+            self._db.execute(f"UPDATE experiments SET {', '.join(c + '=?' for c in cols)} WHERE id=?", (*vals, exp_id))
+
+    @staticmethod
+    def _exp_row(r, full: bool) -> dict:
+        d = {k: r[k] for k in ("id", "created_at", "status", "label", "done", "total", "error")}
+        d["plan"] = json.loads(r["plan_json"])
+        if full:
+            d["results"] = json.loads(r["results_json"]) if r["results_json"] else None
+        return d
+
+    def get_experiment(self, exp_id: int) -> dict | None:
+        r = self._db.execute("SELECT * FROM experiments WHERE id=?", (exp_id,)).fetchone()
+        return self._exp_row(r, True) if r else None
+
+    def list_experiments(self, limit: int = 20) -> list[dict]:
+        rows = self._db.execute("SELECT * FROM experiments ORDER BY created_at DESC, id DESC LIMIT ?", (limit,)).fetchall()
+        return [self._exp_row(r, False) for r in rows]
+
+    def delete_experiment(self, exp_id: int) -> bool:
+        with self._lock, self._db:
+            return self._db.execute("DELETE FROM experiments WHERE id=? AND status!='running'", (exp_id,)).rowcount > 0
+
+    def fail_stale_experiments(self) -> None:
+        """A server restart kills background runs; mark them so the UI does not wait forever."""
+        with self._lock, self._db:
+            self._db.execute("UPDATE experiments SET status='failed', error='Interrupted by a server restart' WHERE status='running'")
