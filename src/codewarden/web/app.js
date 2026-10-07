@@ -500,27 +500,6 @@ function groupedBars(res, suite) {
   return svg;
 }
 
-function interpretation(res) {
-  const out = [], M = res.metrics, get = (id, s) => M[`${id}|${s}`];
-  const base = get('rules', 'general');
-  [...new Set(res.systems.filter((s) => s.provider !== 'rules').map((s) => s.provider))].forEach((p) => {
-    const diff = get(p + '-diff', 'general'), cd = get(p + '-diff', 'context'), cr = get(p + '-rag', 'context');
-    const name = sysLabel(res, p + '-diff').replace(', diff only', '');
-    if (base && diff) {
-      out.push(`General suite: ${name} found ${diff.matched} of ${diff.expected} planted bugs (recall ${pctText(diff.recall)}, precision ${pctText(diff.precision)}) against ${base.matched} of ${base.expected} for the regex baseline (recall ${pctText(base.recall)}, precision ${pctText(base.precision)}).` +
-        (overlap(diff.recall_ci, base.recall_ci) ? ' The recall intervals overlap, so this difference is not established at this sample size.' : ''));
-    }
-    if (cd && cr) {
-      const d = Math.round((cr.recall - cd.recall) * 100);
-      out.push(`Context suite: with repository context ${name} found ${cr.matched} of ${cr.expected} context-dependent bugs, versus ${cd.matched} of ${cd.expected} without it (change in recall ${d >= 0 ? '+' : ''}${d} points). False positives: ${cr.false_positives} with context, ${cd.false_positives} without.` +
-        (overlap(cr.recall_ci, cd.recall_ci) ? ' The recall intervals overlap, so treat this as suggestive rather than conclusive.' : ' The recall intervals do not overlap.'));
-    }
-  });
-  const bc = get('rules', 'context');
-  if (bc) out.push(`The regex baseline found ${bc.matched} of ${bc.expected} context-dependent bugs: pattern matching cannot see repository conventions.`);
-  return out;
-}
-
 function csvOf(res) {
   const rows = [['system', 'suite', 'precision', 'recall', 'f1', 'true_positives', 'false_positives', 'false_negatives', 'clean_false_alarm_rate', 'avg_latency_ms', 'tokens_prompt', 'tokens_output', 'repeats']];
   Object.entries(res.metrics).forEach(([k, m]) => { const [id, suite] = k.split('|'); rows.push([sysLabel(res, id), suite, m.precision, m.recall, m.f1, m.true_positives, m.false_positives, m.false_negatives, m.clean_false_alarm_rate, m.avg_latency_ms, m.tokens_prompt, m.tokens_output, m.repeats]); });
@@ -531,7 +510,7 @@ function download(name, text, type) {
   document.body.append(a); a.click(); a.remove();
 }
 
-function renderResults(exp) {
+function renderTechnical(exp) {
   const res = exp.results;
   const ids = res.systems.map((s) => s.id);
   const rowsFor = (suite) => ids.filter((id) => res.metrics[`${id}|${suite}`]).map((id) => {
@@ -577,49 +556,118 @@ function renderResults(exp) {
     h('p', { class: 'hint', style: 'margin:12px 0 4px' }, 'Reproduce from a terminal:'), h('pre', { class: 'pre', style: 'max-height:none' }, cfg.command),
     h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'btn', onclick: () => download(`codewarden-experiment-${exp.id}.json`, JSON.stringify(res, null, 2), 'application/json') }, 'Download JSON'),
       h('button', { class: 'btn', onclick: () => download(`codewarden-experiment-${exp.id}.csv`, csvOf(res), 'text/csv') }, 'Download CSV')));
-  const notes = interpretation(res);
+  return h('div', {}, metricTable('general'), res.suites.context ? metricTable('context') : null, h('div', { class: 'card card-pad hint', style: 'margin-bottom:14px' }, METRIC_NOTE), ...matrix, fail, repro);
+}
+
+/* ---------- experiment page, in plain language ---------- */
+function helperInfo(s) {
+  if (s.provider === 'rules') return { title: 'Simple rule checker', sub: 'Looks for known bad patterns. This is the helper we want to beat.', cls: 'sb-rules' };
+  const who = s.provider === 'ollama' ? 'AI model that runs on this laptop' : 'AI model from Google (Gemini)';
+  return { title: s.rag ? 'AI that also reads the project' : 'AI that sees only the change', sub: who + (s.model ? ' · ' + s.model : ''), cls: s.rag ? 'sb-rag' : 'sb-ai' };
+}
+const rangeText = (ci) => (ci ? `${Math.round(ci[0] * 100)}% to ${Math.round(ci[1] * 100)}%` : '');
+
+function judge(better, base) {
+  if (!better || !base) return null;
+  if (better.recall > base.recall) {
+    return overlap(better.recall_ci, base.recall_ci)
+      ? { tone: 'medium', text: 'It looks like yes. But we only tested a few bugs, so we cannot be sure it is not luck.' }
+      : { tone: 'ok', text: 'Yes, clearly.' };
+  }
+  return better.recall === base.recall ? { tone: 'medium', text: 'No difference.' } : { tone: 'critical', text: 'No.' };
+}
+
+function scoreboard(res, suite, title, blurb) {
+  const sys = res.systems.filter((s) => res.metrics[`${s.id}|${suite}`]);
+  if (!sys.length) return null;
+  const info = res.suites[suite];
+  const tries = res.config.repeats;
+  return h('div', { class: 'scoreboard' },
+    h('h3', {}, title),
+    h('p', { class: 'hint', style: 'margin:2px 0 12px' }, `${blurb} ${info.bugs} hidden bugs in ${info.cases} files${info.clean ? ` (${info.clean} ${info.clean === 1 ? 'file has' : 'files have'} no bug at all)` : ''}. Every helper tried ${tries === 1 ? 'once' : tries + ' times'}.${suite === 'general' && res.systems.some((x) => x.rag) ? ' The AI that reads the project is not used here, because these bugs do not need the rest of the project.' : ''}`),
+    sys.map((s) => {
+      const m = res.metrics[`${s.id}|${suite}`], hi = helperInfo(s), pct = m.recall == null ? 0 : Math.round(m.recall * 100);
+      return h('div', { class: 'sb-row' },
+        h('div', { class: 'sb-who' }, h('b', {}, hi.title), h('div', { class: 'hint' }, hi.sub)),
+        h('div', { class: 'sb-bar', role: 'img', 'aria-label': `${hi.title} found ${pct} percent of the hidden bugs` }, h('div', { class: 'sb-fill ' + hi.cls, style: `width:${Math.max(pct, 1)}%` })),
+        h('div', { class: 'sb-num' }, h('span', { class: 'sb-big' }, pct + '%'), h('div', { class: 'hint' }, `found ${m.matched} of ${m.expected}`),
+          h('div', { class: 'hint' }, `false alarms: ${m.false_positives}`), m.recall_ci ? h('div', { class: 'hint' }, `likely range: ${rangeText(m.recall_ci)}`) : null));
+    }));
+}
+
+function plainStory(res) {
+  const M = res.metrics, g = (id, s) => M[`${id}|${s}`];
+  const base = g('rules', 'general'), baseCtx = g('rules', 'context');
+  const ais = [...new Set(res.systems.filter((s) => s.provider !== 'rules').map((s) => s.provider))];
+  const answers = [], sentences = [];
+  ais.forEach((p) => {
+    const d = g(p + '-diff', 'general'), cd = g(p + '-diff', 'context'), cr = g(p + '-rag', 'context');
+    const a1 = judge(d, base), a2 = judge(cr, cd);
+    if (a1) answers.push(['Did the AI find more bugs than the simple rule checker?', a1]);
+    if (a2) answers.push(['Did reading the whole project help the AI?', a2]);
+    if (d && base) sentences.push(`Test A: the AI found ${d.matched} of ${d.expected} hidden bugs. The simple rule checker found ${base.matched} of ${base.expected}.`);
+    if (cd && cr) {
+      sentences.push(`Test B: when the AI saw only the change, it found ${cd.matched} of ${cd.expected}. When it could also read the project, it found ${cr.matched} of ${cr.expected}.`);
+      sentences.push(cr.false_positives < cd.false_positives ? `Reading the project also gave fewer false alarms (${cr.false_positives} instead of ${cd.false_positives}).` : cr.false_positives === cd.false_positives ? `The number of false alarms stayed about the same (${cr.false_positives}).` : `Reading the project gave more false alarms (${cr.false_positives} instead of ${cd.false_positives}).`);
+    }
+  });
+  if (baseCtx) sentences.push(`The simple rule checker found ${baseCtx.matched} of ${baseCtx.expected} in Test B. Rules cannot read the rest of the project, so they cannot see these bugs.`);
+  return { answers, sentences };
+}
+
+function renderStory(exp) {
+  const res = exp.results, { answers, sentences } = plainStory(res);
+  const unsure = answers.some(([, a]) => a.tone === 'medium');
   return h('div', {},
-    h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'What the data shows'),
-      notes.length ? h('ul', { style: 'margin:0;padding-left:18px;display:grid;gap:8px' }, notes.map((n) => h('li', {}, n))) : h('p', {}, 'Run at least one language model to compare it with the baseline.'),
-      h('p', { class: 'hint', style: 'margin-bottom:0' }, 'These sentences are generated from the numbers below. Interpret them against the limitations section.')),
-    metricTable('general'), res.suites.context ? metricTable('context') : null, h('div', { class: 'card card-pad hint', style: 'margin-bottom:14px' }, METRIC_NOTE), ...matrix, fail, repro);
+    h('div', { class: 'verdicts' }, answers.length ? answers.map(([q, a]) => h('div', { class: 'verdict ' + a.tone },
+      h('div', { class: 'verdict-q' }, q), h('div', { class: 'verdict-a' }, a.text))) : h('div', { class: 'banner info' }, 'Run the test with an AI model to compare it with the simple rule checker.')),
+    scoreboard(res, 'general', 'Test A: bugs you can see in the change', 'These bugs can be found by reading only the changed lines.'),
+    res.suites.context ? scoreboard(res, 'context', 'Test B: bugs you can only find by knowing the project', 'These bugs are only wrong because of other code in the project, for example a helper that works in a certain way.') : null,
+    sentences.length ? h('div', { class: 'plain-box' }, h('h3', {}, 'In simple words'), h('ul', {}, sentences.map((t) => h('li', {}, t))),
+      unsure ? h('p', { style: 'margin:12px 0 0;font-size:14px' }, h('b', {}, 'Why are we not sure? '), ' We only have a small number of hidden bugs. With so few, one lucky or unlucky result can change the answer. A bigger test would give a firmer answer.') : null) : null,
+    h('div', { class: 'glossary' }, h('h3', {}, 'Words used on this page'),
+      h('dl', {}, h('dt', {}, 'Found (recall)'), h('dd', {}, 'Out of all the hidden bugs, how many did the helper find?'),
+        h('dt', {}, 'False alarm'), h('dd', {}, 'The helper said "there is a bug here", but there was no bug.'),
+        h('dt', {}, 'Correct alarms (precision)'), h('dd', {}, 'Out of everything the helper reported, how much was a real bug? It is shown in the full numbers below.'),
+        h('dt', {}, 'Likely range'), h('dd', {}, 'Because we tested few bugs, the real score could be a bit higher or lower. This range shows how much. If two ranges overlap, the difference may just be luck.'))));
 }
 
 async function pageExperiment() {
   if (!providers) await loadMeta();
   const [meta, exps] = await Promise.all([api('/api/experiment/meta'), api('/api/experiments')]);
-  const results = h('div', {});
+  const resultsBox = h('div', {}), techBox = h('div', {});
   const boxes = {};
-  const status = meta.systems;
-  const checks = h('div', { class: 'list' }, [{ id: 'rules', label: 'Regex baseline', detail: 'Pattern matching only; the control group', available: true, fixed: true },
-    ...status.filter((p) => p.id !== 'rules')].map((p) => {
+  const checks = h('div', { class: 'list' }, [{ id: 'rules', label: 'Simple rule checker', detail: 'Always included', available: true, fixed: true },
+    ...meta.systems.filter((p) => p.id !== 'rules')].map((p) => {
     const cb = h('input', { type: 'checkbox', id: 'sys-' + p.id, checked: p.available, disabled: !p.available || p.fixed });
     boxes[p.id] = cb;
+    const label = p.id === 'ollama' ? 'AI model on this laptop' : p.id === 'gemini' ? 'AI model from Google (Gemini)' : p.label;
     return h('label', { class: 'check', for: 'sys-' + p.id, style: 'padding:8px 0;border-bottom:1px solid var(--border)' }, cb,
-      h('span', {}, h('b', {}, p.label + (p.models && p.models[0] && p.id === 'ollama' ? ` · ${p.models[0]}` : '')), h('div', { class: 'hint' }, p.available ? p.detail : p.detail + ' (unavailable)')));
+      h('span', {}, h('b', {}, label + (p.id === 'ollama' && p.models && p.models[0] ? ' · ' + p.models[0] : '')), h('div', { class: 'hint' }, p.available ? p.detail : 'Not available right now')));
   }));
-  const reps = h('select', { id: 'repeats', 'aria-label': 'Repetitions' }, [1, 3, 5].map((n) => h('option', { value: n }, n === 1 ? '1 run' : `${n} runs`)));
+  const reps = h('select', { id: 'repeats', 'aria-label': 'How many times' }, [1, 3, 5].map((n) => h('option', { value: n }, n === 1 ? 'Once' : `${n} times`)));
   const est = h('div', { class: 'hint' });
   const updateEst = () => {
     const n = Object.entries(boxes).filter(([id, b]) => id !== 'rules' && b.checked).length;
-    est.textContent = n ? `About ${n * meta.calls_per_repeat_per_model * Number(reps.value)} model calls. Hosted models may be rate limited.` : 'Baseline only: no model calls.';
+    est.textContent = n ? `This asks an AI model about ${n * meta.calls_per_repeat_per_model * Number(reps.value)} times. It can take a long time.` : 'Only the simple rule checker runs. It takes a few seconds.';
   };
   reps.addEventListener('change', updateEst); Object.values(boxes).forEach((b) => b.addEventListener('change', updateEst)); updateEst();
-  const PRESET_RUNS = [['Quick: regex baseline only (seconds, no models)', { ids: [], reps: 1 }], ['Local model: baseline + Ollama, 1 run', { ids: ['ollama'], reps: 1 }],
-    ['Full comparison: baseline + Gemini + Ollama, 1 run', { ids: ['gemini', 'ollama'], reps: 1 }], ['Rigorous: baseline + Ollama, 3 runs', { ids: ['ollama'], reps: 3 }]];
-  const presetSel = h('select', { 'aria-label': 'Experiment preset' }, h('option', { value: '' }, 'Choose a preset…'), ...PRESET_RUNS.map(([l], i) => h('option', { value: i }, l)));
+  const PRESET_RUNS = [['Quick: only the simple rule checker (a few seconds)', { ids: [], reps: 1 }], ['AI on this laptop, once', { ids: ['ollama'], reps: 1 }],
+    ['AI on this laptop and Google AI, once', { ids: ['gemini', 'ollama'], reps: 1 }], ['AI on this laptop, 3 times (most careful)', { ids: ['ollama'], reps: 3 }]];
+  const presetSel = h('select', { 'aria-label': 'Choose a ready-made run' }, h('option', { value: '' }, 'Choose a ready-made run…'), ...PRESET_RUNS.map(([l], i) => h('option', { value: i }, l)));
   presetSel.addEventListener('change', () => {
     if (presetSel.value === '') return;
     const { ids, reps: n } = PRESET_RUNS[Number(presetSel.value)][1];
     Object.entries(boxes).forEach(([id, b]) => { if (id !== 'rules' && !b.disabled) b.checked = ids.includes(id); });
     reps.value = String(n); updateEst();
   });
-  const run = h('button', { class: 'btn primary' }, 'Run experiment');
-  const progress = h('div', { hidden: true, style: 'margin-top:14px' });
+  const run = h('button', { class: 'btn primary' }, 'Run the test');
+  const progress = h('div', { class: 'banner info', hidden: true });
   let timer = null;
 
   function showExp(exp) {
-    results.replaceChildren(exp && exp.results ? renderResults(exp) : h('div', { class: 'card' }, h('div', { class: 'empty' }, h('h2', {}, 'No results yet'), h('p', {}, 'Run the experiment above. The baseline alone takes a few seconds.'))));
+    if (exp && exp.results) { resultsBox.replaceChildren(renderStory(exp)); techBox.replaceChildren(renderTechnical(exp)); }
+    else { resultsBox.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'empty' }, h('h2', {}, 'No results yet'), h('p', {}, 'Open "Run the test yourself" at the bottom of this page and press the button.')))); techBox.replaceChildren(); }
   }
   async function poll(id) {
     clearInterval(timer);
@@ -628,61 +676,86 @@ async function pageExperiment() {
       try { exp = await api('/api/experiments/' + id); } catch (_) { return; }
       progress.hidden = false;
       if (exp.status === 'running') {
-        progress.replaceChildren(h('div', { class: 'row' }, h('span', { class: 'spin' }), h('b', {}, `${exp.done} of ${exp.total}`), h('span', { class: 'hint' }, exp.label)),
+        progress.replaceChildren(h('div', { class: 'row' }, h('span', { class: 'spin' }), h('b', {}, `Test is running: ${exp.done} of ${exp.total} files checked`)), h('div', { class: 'hint', style: 'margin-top:4px' }, exp.label),
           h('div', { class: 'bar-track', style: 'margin-top:8px' }, h('div', { class: 'bar-fill', style: `width:${exp.total ? (exp.done / exp.total) * 100 : 0}%` })));
       } else {
         clearInterval(timer); run.disabled = false;
-        if (exp.status === 'failed') { progress.replaceChildren(h('div', { class: 'banner err' }, h('b', {}, 'Experiment failed: '), exp.error, h('div', { class: 'hint' }, 'Nothing was recorded, so no partial numbers can mislead you.'))); }
+        if (exp.status === 'failed') progress.replaceChildren(h('div', { class: 'banner err' }, h('b', {}, 'The test stopped: '), exp.error, h('div', { class: 'hint' }, 'Nothing was saved, so no half-finished numbers can mislead you.')));
         else { progress.hidden = true; refreshPicker(exp.id); }
       }
     };
     timer = setInterval(tick, 1500); tick();
   }
-  const picker = h('select', { 'aria-label': 'Experiment run' });
-  const pickerWrap = h('div', { class: 'row', style: 'margin-bottom:12px' }, h('b', {}, 'Results'), h('span', { class: 'spacer' }), picker);
+  const picker = h('select', { 'aria-label': 'Which test run to show' });
+  const pickerWrap = h('div', { class: 'row' }, h('span', { class: 'hint' }, 'Showing:'), picker);
   async function refreshPicker(selectId) {
     const list = (await api('/api/experiments')).filter((e) => e.status === 'done');
-    picker.replaceChildren(...list.map((e) => h('option', { value: e.id, selected: e.id === selectId }, `Run #${e.id} · ${new Date(e.created_at * 1000).toLocaleString()} · ${e.plan.providers.join(' + ')} × ${e.plan.repeats}`)));
-    pickerWrap.hidden = !list.length;
-    if (list.length) { const exp = await api('/api/experiments/' + (selectId || list[0].id)); showExp(exp); } else showExp(null);
+    picker.replaceChildren(...list.map((e) => h('option', { value: e.id, selected: e.id === selectId }, `Test run #${e.id} · ${new Date(e.created_at * 1000).toLocaleDateString()} · tried ${e.plan.repeats === 1 ? 'once' : e.plan.repeats + ' times'}`)));
+    pickerWrap.hidden = list.length < 2;
+    const fullest = [...list].sort((a, b) => b.plan.systems.length - a.plan.systems.length || b.created_at - a.created_at)[0];  // default: the most complete run
+    if (list.length) { const id = selectId || fullest.id; picker.value = String(id); showExp(await api('/api/experiments/' + id)); } else showExp(null);
   }
   picker.addEventListener('change', async () => showExp(await api('/api/experiments/' + picker.value)));
   run.addEventListener('click', async () => {
-    const providers_ = ['rules', ...Object.entries(boxes).filter(([id, b]) => id !== 'rules' && b.checked).map(([id]) => id)];
+    const chosen = ['rules', ...Object.entries(boxes).filter(([id, b]) => id !== 'rules' && b.checked).map(([id]) => id)];
     run.disabled = true;
-    try { const exp = await api('/api/experiments', { method: 'POST', body: { providers: providers_, repeats: Number(reps.value) } }); poll(exp.id); }
+    try { const exp = await api('/api/experiments', { method: 'POST', body: { providers: chosen, repeats: Number(reps.value) } }); poll(exp.id); }
     catch (e) { run.disabled = false; toast(e.message, true); }
   });
 
-  const kvrow = (k, v) => h('div', {}, h('span', {}, k), h('span', { class: 'mono' }, v));
-  const view = h('div', {},
-    h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Experiment'), h('p', { class: 'sub' }, 'A controlled comparison of review systems on labelled data, with a baseline, confidence intervals and failure analysis.'))),
-    h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'Research question'),
-      h('p', { style: 'margin:0 0 10px;font-size:15px' }, h('b', {}, 'Does giving an LLM reviewer retrieved repository context improve its ability to find bugs in pull requests, compared with reviewing the diff alone and with a pattern-matching baseline?')),
-      h('div', { class: 'grid-2' },
-        h('div', {}, h('div', { class: 'label' }, 'Hypotheses'), h('ol', { style: 'margin:6px 0 0;padding-left:18px;display:grid;gap:6px' },
-          h('li', {}, h('b', {}, 'H1. '), 'An LLM reviewer has higher recall than the regex baseline on bugs that are visible in the diff.'),
-          h('li', {}, h('b', {}, 'H2. '), 'Adding repository context raises recall on context-dependent bugs without raising the false-alarm rate.'),
-          h('li', {}, h('b', {}, 'H3 (exploratory). '), 'A small local model gives up accuracy for lower latency and no data leaving the machine.'))),
-        h('div', {}, h('div', { class: 'label' }, 'Design'), h('div', { class: 'list' },
-          kvrow('Independent variable', 'review system (baseline, diff-only, +RAG)'), kvrow('Dependent variables', 'precision, recall, F1, false alarms, latency, tokens'),
-          kvrow('Held constant', 'prompt, temperature, datasets, scoring'), kvrow('Baseline', 'regex rules (control)'), kvrow('Ablation', 'same model with and without retrieval'))))),
-    h('div', { class: 'card card-pad', style: 'margin-bottom:14px' }, h('h2', {}, 'Datasets'),
-      h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, ...['Suite', 'What it tests', 'Cases', 'Planted bugs', 'Clean cases'].map((c) => h('th', {}, c)))),
-        h('tbody', {}, ...Object.entries(meta.suites).map(([n, s]) => h('tr', {}, h('td', {}, h('b', {}, cap(n))), h('td', { class: 'hint' }, n === 'general' ? 'Bugs visible in the diff alone: SQL injection, XSS, secrets, off-by-one, races, leaks, missing auth, path traversal, N+1' : 'Bugs that are only wrong given the repository: helper signatures, conventions, missing login checks'), h('td', { class: 'num' }, s.cases), h('td', { class: 'num' }, s.bugs), h('td', { class: 'num' }, s.clean)))))),
-      h('p', { class: 'hint', style: 'margin-bottom:0' }, `Each case is a unified diff with an expected file and line. Dataset ${meta.dataset_hash} · prompt ${meta.prompt_hash} · retrieval ${meta.rag.backend} / ${meta.rag.chunker}, top ${meta.rag.top_k} · temperature ${meta.temperature}.`)),
-    h('div', { class: 'card card-pad', style: 'margin-bottom:18px' }, h('h2', {}, 'Run'), h('div', { class: 'grid-2' }, h('div', {}, h('div', { class: 'field' }, h('label', {}, 'Preset'), presetSel), checks), h('div', {}, h('div', { class: 'field' }, h('label', { for: 'repeats' }, 'Repetitions'), reps, h('div', { class: 'hint' }, 'Model output varies between runs. Repeating gives a run-to-run spread.')), est, h('div', { style: 'margin-top:12px' }, run))), progress),
-    pickerWrap, results,
-    h('div', { class: 'card card-pad' }, h('h2', {}, 'Limitations and threats to validity'),
-      h('ul', { style: 'margin:0;padding-left:18px;display:grid;gap:7px' },
-        h('li', {}, h('b', {}, 'Small, synthetic datasets. '), `${Object.values(meta.suites).reduce((n, s) => n + s.bugs, 0)} planted bugs is too few for narrow confidence intervals, and synthetic bugs are cleaner than real ones.`),
-        h('li', {}, h('b', {}, 'Author bias. '), 'The datasets and the regex baseline were written by the same team, so the baseline is not independently tuned and the cases may favour whatever the authors expected to be hard.'),
-        h('li', {}, h('b', {}, 'Non-determinism. '), 'LLM output varies between runs. A single run can mislead, so runs are repeated. Repeats measure noise; the intervals count each distinct bug once because repeats of the same case are not independent evidence.'),
-        h('li', {}, h('b', {}, 'Scoring rule. '), 'A finding is credited if it lands within 2 lines of the planted bug. A correct finding about a different, unplanted real bug counts as a false positive.'),
-        h('li', {}, h('b', {}, 'Moving targets. '), 'Hosted models change and may fall back to another model under load; the models that actually answered are recorded with each run.'),
-        h('li', {}, h('b', {}, 'Retrieval confound. '), 'Context adds tokens as well as information. A gain from retrieval could partly reflect longer prompts rather than the specific code retrieved.'),
-        h('li', {}, h('b', {}, 'Scope. '), 'Mostly Python, one small repository for the context suite, no human reviewer study.'))));
-  (async () => { const done = exps.filter((e) => e.status === 'done'); const running = exps.find((e) => e.status === 'running'); await refreshPicker(done[0] && done[0].id); if (running) { run.disabled = true; poll(running.id); } })();
+  const sec = (n, title, ...kids) => h('section', { class: 'story-sec' }, h('div', { class: 'story-head' }, h('span', { class: 'story-n' }, n), h('h2', {}, title)), ...kids);
+  const detail = (title, hint, ...kids) => h('details', { class: 'card', style: 'margin-bottom:10px' }, h('summary', { style: 'padding:14px 18px;cursor:pointer;font-weight:650' }, title, h('span', { class: 'hint', style: 'font-weight:400;margin-left:10px' }, hint)), h('div', { style: 'padding:0 18px 16px' }, ...kids));
+  const suiteCount = (k) => (meta.suites[k] ? meta.suites[k] : { cases: 0, bugs: 0, clean: 0 });
+
+  const view = h('div', { class: 'story' },
+    h('div', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Experiment'), h('p', { class: 'sub' }, 'We tested our AI code reviewer. This page explains what we did and what we found, in simple words.'))),
+    progress,
+
+    sec(1, 'What we wanted to find out',
+      h('div', { class: 'big-question' }, 'Does the AI find more bugs when it can read the whole project, and not only the small change?'),
+      h('p', {}, 'A person who reviews code often needs to know about the rest of the project. For example, they need to know that the project already has a safe way to talk to the database. We wanted to see if the AI also gets better when we give it that extra reading.'),
+      h('p', {}, 'Giving the AI the right extra code to read is called ', h('b', {}, 'RAG'), ' (say "rag"). First the tool looks up the related code, then the AI reads it together with the change.'),
+      h('div', { class: 'guesses' }, h('div', { class: 'label' }, 'Our three guesses'), h('ol', {},
+        h('li', {}, 'The AI will find more bugs than a simple rule checker.'),
+        h('li', {}, 'Reading the project will help the AI find even more bugs, without more false alarms.'),
+        h('li', {}, 'A small AI on this laptop will be a little less accurate, but it is free and private.')))),
+
+    sec(2, 'How we tested it',
+      h('ol', { class: 'steps' },
+        h('li', {}, h('b', {}, 'We made practice code with hidden bugs. '), `We wrote ${suiteCount('general').cases + suiteCount('context').cases} small pieces of code. ${suiteCount('general').bugs + suiteCount('context').bugs} of them have a bug that we put there on purpose, so we know exactly where each bug is. Some files have no bug, to check that a helper does not shout about nothing.`),
+        h('li', {}, h('b', {}, 'We asked three helpers to find the bugs. '), 'Every helper gets exactly the same files and the same instructions.'),
+        h('li', {}, h('b', {}, 'We counted. '), 'How many hidden bugs did each helper find? How many false alarms did it make?')),
+      h('div', { class: 'two-col' },
+        h('div', {}, h('div', { class: 'label' }, 'The three helpers'), h('ul', { class: 'plain-list' },
+          h('li', {}, h('b', {}, 'Simple rule checker. '), 'Searches for known bad patterns, like a spell checker for bugs. It cannot understand the project. We want the AI to beat it.'),
+          h('li', {}, h('b', {}, 'AI that sees only the change. '), 'Reads just the lines that were changed.'),
+          h('li', {}, h('b', {}, 'AI that also reads the project. '), 'The same AI, plus the related code from the project.'))),
+        h('div', {}, h('div', { class: 'label' }, 'The two tests'), h('ul', { class: 'plain-list' },
+          h('li', {}, h('b', {}, `Test A (${suiteCount('general').cases} files, ${suiteCount('general').bugs} bugs). `), 'Bugs you can see by reading the change, like a password written in the code.'),
+          h('li', {}, h('b', {}, `Test B (${suiteCount('context').cases} files, ${suiteCount('context').bugs} bugs). `), 'Bugs you can only find if you know the rest of the project. This is where reading the project should help.')))),
+      h('p', { class: 'hint', style: 'margin-bottom:0' }, 'We also ran everything several times, because an AI does not always give the same answer twice.')),
+
+    sec(3, 'What we found',
+      exps.some((e) => e.status === 'done') ? h('div', { class: 'row', style: 'margin-bottom:10px' }, pickerWrap) : null,
+      resultsBox),
+
+    sec(4, 'What to be careful about',
+      h('ul', { class: 'plain-list careful' },
+        h('li', {}, h('b', {}, 'Few test bugs. '), `We only used ${Object.values(meta.suites).reduce((n, s) => n + s.bugs, 0)} hidden bugs. That is small, so the results can change a lot if we add more.`),
+        h('li', {}, h('b', {}, 'We made the tests ourselves. '), 'The same team wrote the practice code and the simple rule checker. Someone else might have made it harder or easier.'),
+        h('li', {}, h('b', {}, 'The practice bugs are tidy. '), 'Real bugs in real projects are messier.'),
+        h('li', {}, h('b', {}, 'The AI can change its answer. '), 'That is why we ran the test more than once.'),
+        h('li', {}, h('b', {}, 'Extra reading is also extra words. '), 'The project-reading AI gets a longer message. Part of its gain might come from that, not only from the useful code.'),
+        h('li', {}, h('b', {}, 'Small scope. '), 'Mostly Python code, one small sample project, and no real people reviewing alongside.'))),
+
+    sec(5, 'Details for the examiners',
+      detail('Full numbers', 'precision, recall, F1, ranges, speed', techBox),
+      detail('Run the test yourself', 'choose helpers and press the button',
+        h('div', { class: 'grid-2' }, h('div', {}, h('div', { class: 'field' }, h('label', {}, 'Ready-made run'), presetSel), checks),
+          h('div', {}, h('div', { class: 'field' }, h('label', { for: 'repeats' }, 'How many times?'), reps, h('div', { class: 'hint' }, 'An AI can answer differently each time. More runs give a steadier picture.')), est, h('div', { style: 'margin-top:12px' }, run))),
+        h('p', { class: 'hint', style: 'margin:12px 0 0' }, `Test files used: version ${meta.dataset_hash}. If a run fails, nothing is saved.`))));
+
+  (async () => { const done = exps.filter((e) => e.status === 'done'); const running = exps.find((e) => e.status === 'running'); await refreshPicker(null); if (running) { run.disabled = true; poll(running.id); } })();
   return view;
 }
 
