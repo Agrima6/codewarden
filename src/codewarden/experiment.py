@@ -80,6 +80,24 @@ def wilson(successes: int, n: int, z: float = 1.96) -> tuple[float, float] | Non
     return (max(0.0, centre - half), min(1.0, centre + half))
 
 
+def effective_wilson(successes: float, n: float, repeats: int) -> tuple[float, float] | None:
+    """Interval that treats each distinct case as one observation. Repeated runs of the same cases measure
+    run-to-run noise; they are not new evidence, so counting them would make the interval look too tight."""
+    return wilson(successes / repeats, n / repeats) if n else None
+
+
+def refresh_intervals(res: dict) -> dict:
+    """Recompute intervals on stored results created before the per-case method (idempotent)."""
+    if res.get("config", {}).get("ci_method") == "per-case":
+        return res
+    for m in res["metrics"].values():
+        r = max(1, m.get("repeats", 1))
+        m["precision_ci"] = effective_wilson(m["true_positives"], m["findings"], r)
+        m["recall_ci"] = effective_wilson(m["matched"], m["expected"], r)
+    res.setdefault("config", {})["ci_method"] = "per-case"
+    return res
+
+
 def load_suite(cases_dir: Path) -> list[dict]:
     cases = []
     for diff in sorted(cases_dir.glob("*.diff")):
@@ -146,7 +164,7 @@ def _agg(per_repeat: list[dict]) -> dict:
         "repeats": len(per_repeat), "cases": cases, "expected": exp, "matched": matched, "findings": found,
         "true_positives": tp, "false_positives": found - tp, "false_negatives": exp - matched,
         "precision": precision, "recall": recall, "f1": f1,
-        "precision_ci": wilson(tp, found), "recall_ci": wilson(matched, exp),
+        "precision_ci": effective_wilson(tp, found, len(per_repeat)), "recall_ci": effective_wilson(matched, exp, len(per_repeat)),
         "clean_cases": clean_n, "clean_false_alarms": clean_fp,
         "clean_false_alarm_rate": (clean_fp / clean_n) if clean_n else None,
         "run_to_run": {k: run_stats(k) for k in ("precision", "recall", "f1")} if len(per_repeat) > 1 else None,
@@ -284,7 +302,7 @@ def run_experiment(*, systems: list[System], repeats: int, eval_dir: Path, base_
         "failures": failures,
         "config": {
             "repeats": repeats, "temperature": base_cfg.temperature, "min_confidence": base_cfg.min_confidence,
-            "line_tolerance": 2, "redact_secrets": base_cfg.redact_secrets,
+            "line_tolerance": 2, "redact_secrets": base_cfg.redact_secrets, "ci_method": "per-case",
             "rag": {"backend": base_cfg.rag.backend, "chunker": base_cfg.rag.chunker, "top_k": base_cfg.rag.top_k},
             "models_that_answered": models_used,
             "prompt_hash": hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:12],

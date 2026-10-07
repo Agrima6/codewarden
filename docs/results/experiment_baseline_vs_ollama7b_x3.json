@@ -1,0 +1,1156 @@
+{
+  "id": 1,
+  "created_at": 1791378668.8074749,
+  "status": "done",
+  "label": "Finished",
+  "done": 135,
+  "total": 135,
+  "error": "",
+  "plan": {
+    "providers": [
+      "rules",
+      "ollama"
+    ],
+    "repeats": 3,
+    "systems": [
+      {
+        "id": "rules",
+        "label": "Regex baseline",
+        "provider": "rules",
+        "model": "",
+        "rag": false
+      },
+      {
+        "id": "ollama-diff",
+        "label": "Ollama (qwen2.5-coder:7b), diff only",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:7b",
+        "rag": false
+      },
+      {
+        "id": "ollama-rag",
+        "label": "Ollama (qwen2.5-coder:7b) + RAG",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:7b",
+        "rag": true
+      }
+    ]
+  },
+  "results": {
+    "systems": [
+      {
+        "id": "rules",
+        "label": "Regex baseline",
+        "provider": "rules",
+        "model": "",
+        "rag": false
+      },
+      {
+        "id": "ollama-diff",
+        "label": "Ollama (qwen2.5-coder:7b), diff only",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:7b",
+        "rag": false
+      },
+      {
+        "id": "ollama-rag",
+        "label": "Ollama (qwen2.5-coder:7b) + RAG",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:7b",
+        "rag": true
+      }
+    ],
+    "suites": {
+      "general": {
+        "description": "Bugs visible in the diff alone",
+        "cases": 12,
+        "bugs": 10,
+        "clean": 2,
+        "repo": null
+      },
+      "context": {
+        "description": "Bugs that depend on repository conventions and helper signatures",
+        "cases": 7,
+        "bugs": 6,
+        "clean": 1,
+        "repo": "shop"
+      }
+    },
+    "metrics": {
+      "rules|general": {
+        "repeats": 3,
+        "cases": 36,
+        "expected": 30,
+        "matched": 18,
+        "findings": 21,
+        "true_positives": 18,
+        "false_positives": 3,
+        "false_negatives": 12,
+        "precision": 0.8571428571428571,
+        "recall": 0.6,
+        "f1": 0.7058823529411764,
+        "precision_ci": [
+          0.48686549668097007,
+          0.9743210440510253
+        ],
+        "recall_ci": [
+          0.3126695474501864,
+          0.8318224187964902
+        ],
+        "clean_cases": 6,
+        "clean_false_alarms": 3,
+        "clean_false_alarm_rate": 0.5,
+        "run_to_run": {
+          "precision": [
+            0.8571428571428571,
+            0.0
+          ],
+          "recall": [
+            0.6,
+            0.0
+          ],
+          "f1": [
+            0.7058823529411764,
+            0.0
+          ]
+        },
+        "by_category": {
+          "bug": {
+            "found": 6,
+            "total": 12,
+            "recall": 0.5
+          },
+          "performance": {
+            "found": 3,
+            "total": 3,
+            "recall": 1.0
+          },
+          "security": {
+            "found": 9,
+            "total": 15,
+            "recall": 0.6
+          }
+        },
+        "avg_latency_ms": 0,
+        "requests": 36,
+        "tokens_prompt": 0,
+        "tokens_output": 0
+      },
+      "rules|context": {
+        "repeats": 3,
+        "cases": 21,
+        "expected": 18,
+        "matched": 0,
+        "findings": 0,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 18,
+        "precision": null,
+        "recall": 0.0,
+        "f1": 0.0,
+        "precision_ci": null,
+        "recall_ci": [
+          0.0,
+          0.3903430336530645
+        ],
+        "clean_cases": 3,
+        "clean_false_alarms": 0,
+        "clean_false_alarm_rate": 0.0,
+        "run_to_run": {
+          "precision": null,
+          "recall": [
+            0.0,
+            0.0
+          ],
+          "f1": [
+            0.0,
+            0.0
+          ]
+        },
+        "by_category": {
+          "bug": {
+            "found": 0,
+            "total": 9,
+            "recall": 0.0
+          },
+          "maintainability": {
+            "found": 0,
+            "total": 3,
+            "recall": 0.0
+          },
+          "security": {
+            "found": 0,
+            "total": 6,
+            "recall": 0.0
+          }
+        },
+        "avg_latency_ms": 0,
+        "requests": 21,
+        "tokens_prompt": 0,
+        "tokens_output": 0
+      },
+      "ollama-diff|general": {
+        "repeats": 3,
+        "cases": 36,
+        "expected": 30,
+        "matched": 25,
+        "findings": 30,
+        "true_positives": 25,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "precision": 0.8333333333333334,
+        "recall": 0.8333333333333334,
+        "f1": 0.8333333333333334,
+        "precision_ci": [
+          0.5237808391682292,
+          0.9578590483206929
+        ],
+        "recall_ci": [
+          0.5237808391682292,
+          0.9578590483206929
+        ],
+        "clean_cases": 6,
+        "clean_false_alarms": 2,
+        "clean_false_alarm_rate": 0.3333333333333333,
+        "run_to_run": {
+          "precision": [
+            0.8356902356902357,
+            0.038342466923870014
+          ],
+          "recall": [
+            0.8333333333333334,
+            0.04714045207910316
+          ],
+          "f1": [
+            0.8330827067669174,
+            0.02418513901115749
+          ]
+        },
+        "by_category": {
+          "bug": {
+            "found": 9,
+            "total": 12,
+            "recall": 0.75
+          },
+          "performance": {
+            "found": 3,
+            "total": 3,
+            "recall": 1.0
+          },
+          "security": {
+            "found": 13,
+            "total": 15,
+            "recall": 0.8666666666666667
+          }
+        },
+        "avg_latency_ms": 21726,
+        "requests": 36,
+        "tokens_prompt": 22218,
+        "tokens_output": 3123
+      },
+      "ollama-diff|context": {
+        "repeats": 3,
+        "cases": 21,
+        "expected": 18,
+        "matched": 9,
+        "findings": 12,
+        "true_positives": 9,
+        "false_positives": 3,
+        "false_negatives": 9,
+        "precision": 0.75,
+        "recall": 0.5,
+        "f1": 0.6,
+        "precision_ci": [
+          0.3006360524426366,
+          0.9544139373553637
+        ],
+        "recall_ci": [
+          0.18761280689940868,
+          0.8123871931005913
+        ],
+        "clean_cases": 3,
+        "clean_false_alarms": 1,
+        "clean_false_alarm_rate": 0.3333333333333333,
+        "run_to_run": {
+          "precision": [
+            0.7777777777777778,
+            0.15713484026367724
+          ],
+          "recall": [
+            0.5,
+            0.13608276348795434
+          ],
+          "f1": [
+            0.5925925925925926,
+            0.10475656017578482
+          ]
+        },
+        "by_category": {
+          "bug": {
+            "found": 2,
+            "total": 9,
+            "recall": 0.2222222222222222
+          },
+          "maintainability": {
+            "found": 1,
+            "total": 3,
+            "recall": 0.3333333333333333
+          },
+          "security": {
+            "found": 6,
+            "total": 6,
+            "recall": 1.0
+          }
+        },
+        "avg_latency_ms": 17933,
+        "requests": 21,
+        "tokens_prompt": 12246,
+        "tokens_output": 1264
+      },
+      "ollama-rag|context": {
+        "repeats": 3,
+        "cases": 21,
+        "expected": 18,
+        "matched": 13,
+        "findings": 14,
+        "true_positives": 13,
+        "false_positives": 1,
+        "false_negatives": 5,
+        "precision": 0.9285714285714286,
+        "recall": 0.7222222222222222,
+        "f1": 0.8125000000000001,
+        "precision_ci": [
+          0.4754660291607993,
+          0.9946649806806096
+        ],
+        "recall_ci": [
+          0.3425051131829763,
+          0.9284535385267726
+        ],
+        "clean_cases": 3,
+        "clean_false_alarms": 1,
+        "clean_false_alarm_rate": 0.3333333333333333,
+        "run_to_run": {
+          "precision": [
+            0.9333333333333333,
+            0.09428090415820632
+          ],
+          "recall": [
+            0.7222222222222222,
+            0.07856742013183865
+          ],
+          "f1": [
+            0.8121212121212121,
+            0.07472016973295731
+          ]
+        },
+        "by_category": {
+          "bug": {
+            "found": 6,
+            "total": 9,
+            "recall": 0.6666666666666666
+          },
+          "maintainability": {
+            "found": 3,
+            "total": 3,
+            "recall": 1.0
+          },
+          "security": {
+            "found": 4,
+            "total": 6,
+            "recall": 0.6666666666666666
+          }
+        },
+        "avg_latency_ms": 23449,
+        "requests": 21,
+        "tokens_prompt": 21243,
+        "tokens_output": 1334
+      }
+    },
+    "cases": [
+      {
+        "suite": "general",
+        "case": "clean_code",
+        "expected": "clean: no issue planted",
+        "clean": true,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "hardcoded_secret",
+        "expected": "services/payments.py:3 (security)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "services/payments.py:3 [high] Hard-coded credential"
+            ]
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "services/payments.py:3 [high] Hard-coded secret",
+              "services/payments.py:3 [high] Hard-coded API key"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "missing_auth_check",
+        "expected": "api/admin.py:11 (security)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 2,
+            "false_alarm_runs": 1,
+            "runs": 3,
+            "findings": [
+              "api/admin.py:12 [high] Potential SQL Injection",
+              "api/admin.py:18 [high] Potential XSS"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "n_plus_one",
+        "expected": "api/orders.py:4 (performance)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "api/orders.py:5 [medium] Database call inside a loop (N+1 queries)"
+            ]
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "api/orders.py:5 [high] N+1 Query",
+              "api/orders.py:5 [high] SQL Injection"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "off_by_one",
+        "expected": "utils/stats.py:3 (bug)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "utils/stats.py:3 [high] Likely off-by-one in loop bound"
+            ]
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "utils/stats.py:3 [high] Off-by-one error"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "path_traversal",
+        "expected": "files/download.py:7 (security)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 2,
+            "false_alarm_runs": 1,
+            "runs": 3,
+            "findings": [
+              "files/download.py:7 [medium] Potential Path Traversal",
+              "files/download.py:3 [high] Hard-coded upload directory",
+              "files/download.py:7 [high] Path Traversal"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "race_condition",
+        "expected": "billing/wallet.py:8 (bug)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "resource_leak",
+        "expected": "io/report.py:5 (bug)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 1,
+            "runs": 3,
+            "findings": [
+              "io/report.py:5 [medium] Potential file path traversal",
+              "io/report.py:11 [medium] Potential file path traversal",
+              "io/report.py:5 [medium] File not closed"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "sql_injection",
+        "expected": "app/users.py:6 (security)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/users.py:6 [critical] SQL built with string formatting"
+            ]
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/users.py:6 [high] SQL Injection"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "swallowed_exception",
+        "expected": "jobs/sync.py:10 (bug)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "jobs/sync.py:10 [medium] Overly broad exception handler"
+            ]
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "jobs/sync.py:11 [high] Swallowed exception",
+              "jobs/sync.py:10 [high] Swallowed exception"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "trap_safe_code",
+        "expected": "clean: no issue planted",
+        "clean": true,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 3,
+            "runs": 3,
+            "findings": [
+              "models/money.py:10 [medium] Overly broad exception handler"
+            ]
+          },
+          "ollama-diff": {
+            "found_in": 0,
+            "false_alarm_runs": 2,
+            "runs": 3,
+            "findings": [
+              "models/money.py:8 [high] SQL Injection",
+              "models/money.py:9 [high] SQL Injection"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "general",
+        "case": "xss_innerhtml",
+        "expected": "web/comments.js:3 (security)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "web/comments.js:3 [high] Unsanitised HTML injection"
+            ]
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "web/comments.js:3 [high] XSS vulnerability"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "context",
+        "case": "bypasses_db_helper",
+        "expected": "app/reports.py:8 (maintainability)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 1,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/reports.py:8 [high] Insecure database connection"
+            ]
+          },
+          "ollama-rag": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/reports.py:8 [high] SQL Injection",
+              "app/reports.py:8 [high] Insecure database connection"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "context",
+        "case": "correct_usage_clean",
+        "expected": "clean: no issue planted",
+        "clean": true,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 0,
+            "false_alarm_runs": 1,
+            "runs": 3,
+            "findings": [
+              "app/shipping.py:7 [high] SQL Injection"
+            ]
+          },
+          "ollama-rag": {
+            "found_in": 0,
+            "false_alarm_runs": 1,
+            "runs": 3,
+            "findings": [
+              "app/shipping.py:7 [high] Potential off-by-one error"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "context",
+        "case": "missing_login_check",
+        "expected": "app/invoices.py:4 (security)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/invoices.py:5 [high] Potential off-by-one error",
+              "app/invoices.py:5 [high] SQL Injection"
+            ]
+          },
+          "ollama-rag": {
+            "found_in": 1,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/invoices.py:5 [high] Potential SQL Injection"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "context",
+        "case": "nonexistent_helper",
+        "expected": "app/profile.py:1 (bug)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 0,
+            "false_alarm_runs": 2,
+            "runs": 3,
+            "findings": [
+              "app/profile.py:6 [high] Potential SQL Injection"
+            ]
+          },
+          "ollama-rag": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          }
+        }
+      },
+      {
+        "suite": "context",
+        "case": "unsanitized_filename",
+        "expected": "app/avatars.py:10 (security)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/avatars.py:10 [medium] Potential Path Traversal",
+              "app/avatars.py:10 [high] Path Traversal"
+            ]
+          },
+          "ollama-rag": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/avatars.py:10 [high] Path Traversal",
+              "app/avatars.py:11 [high] Path Traversal"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "context",
+        "case": "wrong_params_type",
+        "expected": "app/refunds.py:7 (bug)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 1,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/refunds.py:6 [medium] Potential security issue"
+            ]
+          },
+          "ollama-rag": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/refunds.py:7 [high] Potential SQL Injection",
+              "app/refunds.py:7 [high] Missing parameter in SQL query"
+            ]
+          }
+        }
+      },
+      {
+        "suite": "context",
+        "case": "wrong_secret_signature",
+        "expected": "app/webhooks.py:8 (bug)",
+        "clean": false,
+        "systems": {
+          "rules": {
+            "found_in": 0,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": []
+          },
+          "ollama-diff": {
+            "found_in": 1,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/webhooks.py:8 [medium] Hard-coded default secret"
+            ]
+          },
+          "ollama-rag": {
+            "found_in": 3,
+            "false_alarm_runs": 0,
+            "runs": 3,
+            "findings": [
+              "app/webhooks.py:8 [medium] Default secret handling",
+              "app/webhooks.py:8 [high] Default secret in production"
+            ]
+          }
+        }
+      }
+    ],
+    "failures": [
+      {
+        "kind": "missed",
+        "suite": "general",
+        "case": "missing_auth_check",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected api/admin.py:11 (security)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "general",
+        "case": "missing_auth_check",
+        "system": "ollama-diff",
+        "detail": "found in 2/3 runs. Expected api/admin.py:11 (security)",
+        "reported": [
+          "api/admin.py:12 [high] Potential SQL Injection",
+          "api/admin.py:18 [high] Potential XSS"
+        ]
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "general",
+        "case": "missing_auth_check",
+        "system": "ollama-diff",
+        "detail": "extra findings in 1/3 runs",
+        "reported": [
+          "api/admin.py:12 [high] Potential SQL Injection",
+          "api/admin.py:18 [high] Potential XSS"
+        ]
+      },
+      {
+        "kind": "missed",
+        "suite": "general",
+        "case": "path_traversal",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected files/download.py:7 (security)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "general",
+        "case": "path_traversal",
+        "system": "ollama-diff",
+        "detail": "found in 2/3 runs. Expected files/download.py:7 (security)",
+        "reported": [
+          "files/download.py:7 [medium] Potential Path Traversal",
+          "files/download.py:3 [high] Hard-coded upload directory",
+          "files/download.py:7 [high] Path Traversal"
+        ]
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "general",
+        "case": "path_traversal",
+        "system": "ollama-diff",
+        "detail": "extra findings in 1/3 runs",
+        "reported": [
+          "files/download.py:7 [medium] Potential Path Traversal",
+          "files/download.py:3 [high] Hard-coded upload directory",
+          "files/download.py:7 [high] Path Traversal"
+        ]
+      },
+      {
+        "kind": "missed",
+        "suite": "general",
+        "case": "race_condition",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected billing/wallet.py:8 (bug)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "general",
+        "case": "race_condition",
+        "system": "ollama-diff",
+        "detail": "found in 0/3 runs. Expected billing/wallet.py:8 (bug)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "general",
+        "case": "resource_leak",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected io/report.py:5 (bug)",
+        "reported": []
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "general",
+        "case": "resource_leak",
+        "system": "ollama-diff",
+        "detail": "extra findings in 1/3 runs",
+        "reported": [
+          "io/report.py:5 [medium] Potential file path traversal",
+          "io/report.py:11 [medium] Potential file path traversal",
+          "io/report.py:5 [medium] File not closed"
+        ]
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "general",
+        "case": "trap_safe_code",
+        "system": "rules",
+        "detail": "extra findings in 3/3 runs",
+        "reported": [
+          "models/money.py:10 [medium] Overly broad exception handler"
+        ]
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "general",
+        "case": "trap_safe_code",
+        "system": "ollama-diff",
+        "detail": "extra findings in 2/3 runs",
+        "reported": [
+          "models/money.py:8 [high] SQL Injection",
+          "models/money.py:9 [high] SQL Injection"
+        ]
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "bypasses_db_helper",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected app/reports.py:8 (maintainability)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "bypasses_db_helper",
+        "system": "ollama-diff",
+        "detail": "found in 1/3 runs. Expected app/reports.py:8 (maintainability)",
+        "reported": [
+          "app/reports.py:8 [high] Insecure database connection"
+        ]
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "context",
+        "case": "correct_usage_clean",
+        "system": "ollama-diff",
+        "detail": "extra findings in 1/3 runs",
+        "reported": [
+          "app/shipping.py:7 [high] SQL Injection"
+        ]
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "context",
+        "case": "correct_usage_clean",
+        "system": "ollama-rag",
+        "detail": "extra findings in 1/3 runs",
+        "reported": [
+          "app/shipping.py:7 [high] Potential off-by-one error"
+        ]
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "missing_login_check",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected app/invoices.py:4 (security)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "missing_login_check",
+        "system": "ollama-rag",
+        "detail": "found in 1/3 runs. Expected app/invoices.py:4 (security)",
+        "reported": [
+          "app/invoices.py:5 [high] Potential SQL Injection"
+        ]
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "nonexistent_helper",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected app/profile.py:1 (bug)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "nonexistent_helper",
+        "system": "ollama-diff",
+        "detail": "found in 0/3 runs. Expected app/profile.py:1 (bug)",
+        "reported": [
+          "app/profile.py:6 [high] Potential SQL Injection"
+        ]
+      },
+      {
+        "kind": "false_alarm",
+        "suite": "context",
+        "case": "nonexistent_helper",
+        "system": "ollama-diff",
+        "detail": "extra findings in 2/3 runs",
+        "reported": [
+          "app/profile.py:6 [high] Potential SQL Injection"
+        ]
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "nonexistent_helper",
+        "system": "ollama-rag",
+        "detail": "found in 0/3 runs. Expected app/profile.py:1 (bug)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "unsanitized_filename",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected app/avatars.py:10 (security)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "wrong_params_type",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected app/refunds.py:7 (bug)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "wrong_params_type",
+        "system": "ollama-diff",
+        "detail": "found in 1/3 runs. Expected app/refunds.py:7 (bug)",
+        "reported": [
+          "app/refunds.py:6 [medium] Potential security issue"
+        ]
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "wrong_secret_signature",
+        "system": "rules",
+        "detail": "found in 0/3 runs. Expected app/webhooks.py:8 (bug)",
+        "reported": []
+      },
+      {
+        "kind": "missed",
+        "suite": "context",
+        "case": "wrong_secret_signature",
+        "system": "ollama-diff",
+        "detail": "found in 1/3 runs. Expected app/webhooks.py:8 (bug)",
+        "reported": [
+          "app/webhooks.py:8 [medium] Hard-coded default secret"
+        ]
+      }
+    ],
+    "config": {
+      "repeats": 3,
+      "temperature": 0.2,
+      "min_confidence": 0.5,
+      "line_tolerance": 2,
+      "redact_secrets": true,
+      "rag": {
+        "backend": "chroma",
+        "chunker": "langchain",
+        "top_k": 4
+      },
+      "models_that_answered": {
+        "rules": [],
+        "ollama-diff": [
+          "qwen2.5-coder:7b"
+        ],
+        "ollama-rag": [
+          "qwen2.5-coder:7b"
+        ]
+      },
+      "prompt_hash": "1d2b601c96fd",
+      "dataset_hash": "b3533d6a5b2a",
+      "codewarden_version": "0.1.0",
+      "git_commit": "18fc751",
+      "python": "3.14.8",
+      "duration_s": 7143.7,
+      "command": "codewarden experiment --providers ollama,rules --repeats 3",
+      "ci_method": "per-case"
+    }
+  }
+}

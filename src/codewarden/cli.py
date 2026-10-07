@@ -213,8 +213,7 @@ def cmd_demo(args) -> int:
     if shop is None or _find_dir(args.demo_dir) is None:
         print("error: run this from the codewarden repository (demo/ folder not found)", file=sys.stderr)
         return 2
-    db = Path(args.db)
-    db.unlink(missing_ok=True)
+    db = Path(args.db)  # kept between runs so stored experiments survive; sample reviews are re-seeded
     demo_cfg = _find_dir("demo")
     if not args.config and demo_cfg and (demo_cfg / "codewarden.yml").exists():
         args.config = str(demo_cfg / "codewarden.yml")

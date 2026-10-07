@@ -466,7 +466,7 @@ async function pageRepos() {
 }
 
 /* ---------- experiment ---------- */
-const METRIC_NOTE = 'A finding is a true positive when it is in the same file within 2 lines of a planted bug. Precision = true-positive findings / all findings. Recall = planted bugs found / planted bugs. F1 is their harmonic mean. Intervals are 95% Wilson score intervals.';
+const METRIC_NOTE = 'A finding is a true positive when it is in the same file within 2 lines of a planted bug. Precision = true-positive findings / all findings. Recall = planted bugs found / planted bugs. F1 is their harmonic mean. Intervals are 95% Wilson score intervals that count each distinct planted bug once: repeated runs show run-to-run noise but are not extra evidence.';
 function pctText(v) { return v == null ? 'n/a' : Math.round(v * 100) + '%'; }
 function ciText(ci) { return ci ? `${Math.round(ci[0] * 100)}-${Math.round(ci[1] * 100)}%` : ''; }
 function overlap(a, b) { return a && b && a[0] <= b[1] && b[0] <= a[1]; }
@@ -677,7 +677,7 @@ async function pageExperiment() {
       h('ul', { style: 'margin:0;padding-left:18px;display:grid;gap:7px' },
         h('li', {}, h('b', {}, 'Small, synthetic datasets. '), `${Object.values(meta.suites).reduce((n, s) => n + s.bugs, 0)} planted bugs is too few for narrow confidence intervals, and synthetic bugs are cleaner than real ones.`),
         h('li', {}, h('b', {}, 'Author bias. '), 'The datasets and the regex baseline were written by the same team, so the baseline is not independently tuned and the cases may favour whatever the authors expected to be hard.'),
-        h('li', {}, h('b', {}, 'Non-determinism. '), 'LLM output varies between runs. A single run can mislead; use repeated runs and the reported intervals.'),
+        h('li', {}, h('b', {}, 'Non-determinism. '), 'LLM output varies between runs. A single run can mislead, so runs are repeated. Repeats measure noise; the intervals count each distinct bug once because repeats of the same case are not independent evidence.'),
         h('li', {}, h('b', {}, 'Scoring rule. '), 'A finding is credited if it lands within 2 lines of the planted bug. A correct finding about a different, unplanted real bug counts as a false positive.'),
         h('li', {}, h('b', {}, 'Moving targets. '), 'Hosted models change and may fall back to another model under load; the models that actually answered are recorded with each run.'),
         h('li', {}, h('b', {}, 'Retrieval confound. '), 'Context adds tokens as well as information. A gain from retrieval could partly reflect longer prompts rather than the specific code retrieved.'),

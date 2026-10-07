@@ -221,7 +221,8 @@ class Store:
         d = {k: r[k] for k in ("id", "created_at", "status", "label", "done", "total", "error")}
         d["plan"] = json.loads(r["plan_json"])
         if full:
-            d["results"] = json.loads(r["results_json"]) if r["results_json"] else None
+            from codewarden.experiment import refresh_intervals
+            d["results"] = refresh_intervals(json.loads(r["results_json"])) if r["results_json"] else None
         return d
 
     def get_experiment(self, exp_id: int) -> dict | None:

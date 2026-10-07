@@ -182,3 +182,23 @@ def test_transient_provider_errors_are_retried_but_permanent_ones_abort(monkeypa
     monkeypatch.setattr("codewarden.experiment.get_llm", lambda cfg: BadKey())
     with pytest.raises(ExperimentError, match="403"):
         run_experiment(systems=build_systems(["gemini"])[:1], repeats=1, eval_dir=EVAL, base_cfg=cfg)
+
+
+def test_intervals_do_not_shrink_just_because_runs_were_repeated():
+    cfg = Config()
+    one = run_experiment(systems=build_systems(["rules"]), repeats=1, eval_dir=EVAL, base_cfg=cfg)["metrics"]["rules|general"]
+    three = run_experiment(systems=build_systems(["rules"]), repeats=3, eval_dir=EVAL, base_cfg=cfg)["metrics"]["rules|general"]
+    assert three["matched"] == 3 * one["matched"], "counts are pooled across repeats"
+    for a, b in zip(one["recall_ci"], three["recall_ci"]):
+        assert abs(a - b) < 1e-9, "but the interval reflects the number of distinct bugs, not bugs x runs"
+
+
+def test_old_stored_results_get_corrected_intervals():
+    from codewarden.experiment import effective_wilson, refresh_intervals
+    old = {"config": {}, "metrics": {"x|general": {"repeats": 3, "matched": 18, "expected": 30, "true_positives": 15, "findings": 18,
+                                                    "recall_ci": list(wilson(18, 30)), "precision_ci": None}}}
+    fixed = refresh_intervals(old)
+    assert fixed["config"]["ci_method"] == "per-case"
+    lo, hi = fixed["metrics"]["x|general"]["recall_ci"]
+    assert (lo, hi) == effective_wilson(18, 30, 3) and hi - lo > wilson(18, 30)[1] - wilson(18, 30)[0]
+    assert refresh_intervals(fixed) is fixed
