@@ -12,6 +12,10 @@ exclude:                  # extra glob patterns to skip, added to the built-in l
   - "*.generated.*"
 
 redact_secrets: true      # strip credentials from code before it is sent to the model
+mask_pii: true            # mask emails, phone numbers, card and ID numbers before they reach a model
+detect_injection: true    # flag and neutralise instruction-like text in the diff, PR text and retrieved code
+sanitize_output: true     # strip @mentions, links, images, HTML and unsafe one-click fixes from model text
+post_limit_per_hour: 10   # most reviews the dashboard will post to GitHub per hour
 
 rag:
   enabled: true           # give the model related code from the repository
