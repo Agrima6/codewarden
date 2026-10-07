@@ -87,6 +87,7 @@ def test_any_provider_failure_aborts_instead_of_recording_garbage(monkeypatch):
             raise LLMError("HTTP 429: quota", 429)
 
     monkeypatch.setattr("codewarden.experiment.get_llm", lambda cfg: Down())
+    monkeypatch.setattr("codewarden.experiment._sleep", lambda s: None)
     with pytest.raises(ExperimentError, match="quota"):
         run_experiment(systems=build_systems(["gemini"]), repeats=1, eval_dir=EVAL, base_cfg=Config())
     with pytest.raises(ExperimentError):
@@ -145,3 +146,39 @@ def test_experiment_and_repo_api(tmp_path, monkeypatch):
     assert c.delete("/api/repos/..%2f..%2fetc").status_code in (400, 404, 405)
     assert c.get("/api/repos/nope__nope/pulls").status_code == 400
     assert c.get("/api/repos").json()["connected"] == []
+
+
+def test_transient_provider_errors_are_retried_but_permanent_ones_abort(monkeypatch):
+    from codewarden.llm.base import LLMError
+    monkeypatch.setattr("codewarden.experiment._sleep", lambda s: None)
+    truth = {}
+    for d in (EVAL, ROOT / "eval/context_cases"):
+        for case in load_suite(d):
+            for e in case["expected"]:
+                truth[e["path"]] = e["lines"][0]
+
+    class Flaky(Oracle):
+        def __init__(self):
+            super().__init__(truth)
+            self.fail_next = 2
+
+        def complete(self, system, user):
+            if self.fail_next:
+                self.fail_next -= 1
+                raise LLMError("HTTP 503: This model is currently experiencing high demand", 503)
+            return super().complete(system, user)
+
+    flaky = Flaky()
+    monkeypatch.setattr("codewarden.experiment.get_llm", lambda cfg: flaky)
+    cfg = Config()
+    cfg.rag.backend = "bm25"
+    res = run_experiment(systems=build_systems(["gemini"])[:1], repeats=1, eval_dir=EVAL, base_cfg=cfg)
+    assert res["metrics"]["gemini-diff|general"]["recall"] == 1.0
+
+    class BadKey:
+        def complete(self, s, u):
+            raise LLMError("HTTP 403: API key not valid", 403)
+
+    monkeypatch.setattr("codewarden.experiment.get_llm", lambda cfg: BadKey())
+    with pytest.raises(ExperimentError, match="403"):
+        run_experiment(systems=build_systems(["gemini"])[:1], repeats=1, eval_dir=EVAL, base_cfg=cfg)

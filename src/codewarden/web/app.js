@@ -122,14 +122,15 @@ function defaultProvider() {
 function providerPicker(initial) {
   const sel = h('select', { id: 'provider', 'aria-label': 'Model provider' }, providers.map((p) =>
     h('option', { value: p.id, disabled: !p.available, selected: p.id === initial }, p.label + (p.available ? '' : ' (unavailable)'))));
-  const model = h('input', { type: 'text', id: 'model', placeholder: 'Default model', list: 'models', 'aria-label': 'Model name' });
+  const model = h('input', { type: 'text', id: 'model', placeholder: 'Default model', list: 'models', autocomplete: 'off', 'aria-label': 'Model name' });
   const dl = h('datalist', { id: 'models' });
   const note = h('div', { class: 'hint' });
   const sync = () => {
     const p = providers.find((x) => x.id === sel.value);
     dl.replaceChildren(...(p.models || []).map((m) => h('option', { value: m })));
     model.disabled = p.id === 'rules';
-    if (p.id === 'rules') model.value = '';
+    model.value = '';  // a model name only makes sense for the provider it was typed for
+    model.placeholder = p.id === 'rules' ? 'Not used' : `Default${p.models && p.models[0] ? ' (' + p.models[0] + ')' : ''}`;
     note.textContent = p.detail;
   };
   sel.addEventListener('change', sync); sync();

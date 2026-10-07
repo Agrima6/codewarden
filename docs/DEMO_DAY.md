@@ -71,3 +71,33 @@ If the key's quota is exhausted, the Experiment page reports the failure and rec
 | Repo clone fails | The repo may be private, misspelled or over 400 MB. Use another public repo or one connected earlier. |
 | Page will not load | `codewarden demo` must be running in a terminal; reload `http://127.0.0.1:8765`. |
 | Asked something you do not know | Say what the data shows and what you would test next. |
+
+## Page by page: what to show and how
+
+Open `http://127.0.0.1:8765` and hard-refresh (Cmd+Shift+R) after any restart. Ollama runs one request at a time, so do not start a model review or a Q&A while an experiment is running.
+
+| Page | What it is | How to demonstrate |
+|---|---|---|
+| **Overview** | History and statistics of every review | Show the counts, severity bars, "Most common issues" and the recent-reviews table. Click a review to open it. Message: "this is the audit trail of what the tool found across pull requests." |
+| **Repositories** | Connect a public GitHub repo, browse its PRs | Paste your repo URL -> **Connect** (it clones and indexes it). Click **Pull requests**, pick one, choose the reviewer, click **Review**. Message: "the model gets real surrounding code, not just the diff." Use **Remove** to show you can disconnect. |
+| **New review** | Review a pasted diff, a PR URL or a bundled sample | **Sample** tab: pick *Add checkout with coupons*, reviewer = offline baseline for an instant result, then repeat with a model. **GitHub PR** tab: paste any public PR URL. **Paste diff**: paste `git diff` output. Toggle "Use repository context" off and on to show the effect. |
+| **Review detail** (after any review) | The result | Findings sit on exact lines with severity, category, confidence and fix. Open **Repository context sent to the model** (the retrieved files). Click **Generate tests**. Use the severity chips to filter. **Copy summary** exports text. If a real PR was reviewed and a GitHub token is set, **Post to GitHub** publishes inline comments. |
+| **Experiment** | The research part | Read the research question and hypotheses; point at the dataset table. Show the stored run: tables with intervals, charts, "What the data shows", per-case matrix, **Failure analysis**, **Methodology and reproducibility** (hashes, models, command), download JSON/CSV. Finish on **Limitations**. |
+| **Ask the repo** | Retrieval-augmented Q&A | Choose your repo, ask "how do I check a user is logged in?" or "where are files saved?". The answer cites files; open a source to show the retrieved code. With the offline reviewer you see only the retrieved code. |
+| **Settings** | Configuration and status | Show which model backends are available, the retrieval settings (Chroma + LangChain chunking, top 4), whether a GitHub token / webhook is set. Message: "everything is configurable and nothing sensitive is displayed." |
+
+### Optional: post real review comments on your GitHub PRs
+
+To show comments appearing on GitHub itself, start the server with a token from your own login (do this before presenting, not during an experiment):
+
+```bash
+export GITHUB_TOKEN="$(gh auth token)"
+codewarden demo
+```
+
+Then review one of your PRs from **Repositories** and click **Post to GitHub** on the review page. It asks for confirmation first.
+
+### Suggested model choice on each page
+- Quick, always-available: **Rule-based baseline** (state clearly that it is the control, not an AI model).
+- Real AI, local, no limits: **Ollama (local)** with the default model.
+- Real AI, hosted: **Google Gemini**; subject to the key's quota, so keep a stored run ready.

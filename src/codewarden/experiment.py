@@ -28,6 +28,14 @@ from codewarden.review import review_diff
 
 Progress = Callable[[int, int, str], None]
 
+CASE_BACKOFF_S = (10, 30, 60, 90)  # waits before re-trying a case when the provider is overloaded
+_sleep = time.sleep
+
+
+def _transient(message: str) -> bool:
+    m = message.lower()
+    return any(t in m for t in ("http 503", "http 429", "http 500", "http 502", "http 504", "timeout", "network error", "no content", "giving up"))
+
 
 @dataclass(frozen=True)
 class System:
@@ -202,9 +210,15 @@ def run_experiment(*, systems: list[System], repeats: int, eval_dir: Path, base_
                             retrievers[key] = build_retriever(suite["repo"], base_cfg.rag)
                         retriever = retrievers[key]
                     before = dict(getattr(llm, "usage", {}) or {})
-                    res = review_diff(case["diff"], cfg, llm, retriever)
-                    if res.errors:
-                        raise ExperimentError(f"{system.label} on {suite_name}/{case['name']}: {res.errors[0]}")
+                    for wait in (*CASE_BACKOFF_S, None):
+                        res = review_diff(case["diff"], cfg, llm, retriever)
+                        if not res.errors:
+                            break
+                        if wait is None or not _transient(res.errors[0]):
+                            raise ExperimentError(f"{system.label} on {suite_name}/{case['name']}: {res.errors[0]}")
+                        if progress:
+                            progress(done, total, f"Provider busy, retrying in {wait}s · {system.label} · {suite_name}/{case['name']}")
+                        _sleep(wait)
                     matched, tp, _ = score_case(res.findings, case["expected"])
                     expected_n = len(case["expected"])
                     row["expected"] += expected_n

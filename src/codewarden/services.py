@@ -74,6 +74,10 @@ class Engine:
             cfg.model = model
         if rag is not None:
             cfg.rag.enabled = rag
+        if cfg.provider == "ollama" and not cfg.model:  # use what is actually installed, largest first
+            installed = next((p["models"] for p in self.provider_status() if p["id"] == "ollama"), [])
+            if installed:
+                cfg.model = installed[0]
         cfg.validate()
         return cfg
 

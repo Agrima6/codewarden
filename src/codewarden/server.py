@@ -92,6 +92,8 @@ def create_app(engine: Engine, dashboard_token: str | None = None, allowed_hosts
             if not secrets.compare_digest(supplied, dashboard_token):
                 return JSONResponse({"error": "Unauthorized"}, status_code=401)
         response = await call_next(request)
+        if not request.url.path.startswith(("/api/", "/webhook/")):
+            response.headers["Cache-Control"] = "no-cache"  # always pick up the current dashboard code
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         return response
