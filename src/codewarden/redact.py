@@ -11,7 +11,7 @@ _PATTERNS = [
     (re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}\b"), "[REDACTED_API_KEY]"),
     (re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b"), "[REDACTED_SLACK_TOKEN]"),
     (
-        re.compile(r"""(?ix)\b((?:api[_-]?key|secret|token|passw(?:or)?d|pwd|auth)[\w-]*\s*[:=]\s*)(["'])([^"'\n]{8,})\2"""),
+        re.compile(r"""(?ix)(\w*?(?:api[_-]?key|secret|token|passw(?:or)?d|pwd|auth)[\w-]*\s*[:=]\s*)(["'])(?!\[REDACTED)([^"'\n]{8,})\2"""),
         r"\1\2[REDACTED_SECRET]\2",
     ),
 ]

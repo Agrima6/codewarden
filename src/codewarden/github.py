@@ -8,6 +8,7 @@ from codewarden.models import Finding
 from codewarden.report import MARKER_RE, render_comment
 
 API = "https://api.github.com"
+ALLOWED_REVIEW_EVENTS = frozenset({"COMMENT"})  # guardrail: never APPROVE or REQUEST_CHANGES
 
 
 class GitHubError(RuntimeError):
@@ -65,7 +66,10 @@ class GitHubClient:
             raise GitHubError("GITHUB_TOKEN is not set; cannot post a review")
         inline = [f for f in findings if f.anchored]
         payload_comments = [{"path": f.path, "line": f.line, "side": "RIGHT", "body": render_comment(f)} for f in inline]
-        body = {"commit_id": head_sha, "event": "COMMENT", "body": summary, "comments": payload_comments}
+        event = "COMMENT"
+        if event not in ALLOWED_REVIEW_EVENTS:
+            raise GitHubError(f"Review event {event!r} is not allowed")
+        body = {"commit_id": head_sha, "event": event, "body": summary, "comments": payload_comments}
         r = self._req("POST", f"/pulls/{number}/reviews", json=body)
         if r.status_code == 200:
             return len(inline), 0

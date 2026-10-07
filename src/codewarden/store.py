@@ -6,6 +6,7 @@ import threading
 import time
 from pathlib import Path
 
+from codewarden.guardrails import summarise
 from codewarden.models import SEVERITIES, ReviewResult
 
 _SCHEMA = """
@@ -51,6 +52,14 @@ CREATE TABLE IF NOT EXISTS experiments (
     plan_json TEXT NOT NULL,
     results_json TEXT
 );
+CREATE TABLE IF NOT EXISTS guardrail_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    review_id INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+    layer TEXT NOT NULL,
+    rule TEXT NOT NULL,
+    action TEXT NOT NULL,
+    count INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS eval_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at REAL NOT NULL,
@@ -71,6 +80,8 @@ def result_to_dict(r: ReviewResult) -> dict:
         "files_skipped": r.files_skipped,
         "errors": r.errors,
         "context_used": r.context_used,
+        "guardrails": [e.to_dict() for e in r.guardrails],
+        "guardrail_summary": summarise(r.guardrails),
         "dropped": {
             "low_confidence": r.dropped_low_confidence, "below_severity": r.dropped_below_severity,
             "duplicates": r.dropped_duplicates, "over_cap": r.dropped_over_cap,
@@ -105,6 +116,10 @@ class Store:
             self._db.executemany(
                 "INSERT INTO findings (review_id, path, line, severity, category, title, confidence) VALUES (?,?,?,?,?,?,?)",
                 [(rid, f.path, f.line, f.severity, f.category, f.title, f.confidence) for f in result.findings],
+            )
+            self._db.executemany(
+                "INSERT INTO guardrail_events (review_id, layer, rule, action, count) VALUES (?,?,?,?,?)",
+                [(rid, e.layer, e.rule, e.action, e.count) for e in result.guardrails],
             )
         return rid
 
@@ -166,6 +181,11 @@ class Store:
         return {"reviews": totals["n"], "findings": totals["f"], "files_reviewed": totals["files"],
                 "avg_duration_ms": int(totals["d"]), "by_severity": sev, "by_category": cat,
                 "top_issues": top, "hot_files": hot, "providers": providers}
+
+    def guardrail_stats(self) -> dict:
+        rows = self._db.execute("SELECT rule, SUM(count) n, COUNT(DISTINCT review_id) r FROM guardrail_events GROUP BY rule").fetchall()
+        total = self._db.execute("SELECT COUNT(*) FROM reviews").fetchone()[0]
+        return {"reviews": total, "rules": {r["rule"]: {"triggers": r["n"], "reviews": r["r"]} for r in rows}}
 
     def add_eval(self, provider: str, model: str, precision, recall, false_positives: int, cases: list[dict]) -> int:
         with self._lock, self._db:

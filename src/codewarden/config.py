@@ -52,6 +52,10 @@ class Config:
     max_files: int = 40
     max_chars_per_request: int = 12_000
     redact_secrets: bool = True
+    mask_pii: bool = True
+    detect_injection: bool = True
+    sanitize_output: bool = True
+    post_limit_per_hour: int = 10
     rag: RagConfig = field(default_factory=RagConfig)
 
     def resolved_model(self) -> str:
@@ -64,6 +68,8 @@ class Config:
             raise ValueError(f"fail_on must be 'none' or one of {SEVERITIES}")
         if not 0 <= self.min_confidence <= 1:
             raise ValueError("min_confidence must be between 0 and 1")
+        if self.post_limit_per_hour < 1:
+            raise ValueError("post_limit_per_hour must be >= 1")
         if self.max_comments < 1 or self.max_chars_per_request < 500:
             raise ValueError("max_comments must be >= 1 and max_chars_per_request >= 500")
         if self.rag.backend not in ("bm25", "chroma"):

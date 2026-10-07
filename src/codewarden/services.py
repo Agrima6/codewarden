@@ -17,6 +17,8 @@ from codewarden.evaluate import run_eval, summarize
 from codewarden.experiment import ExperimentError, build_systems, dataset_hash, load_suite, run_experiment
 from codewarden.prompts import SYSTEM_PROMPT
 from codewarden.github import GitHubClient, GitHubError
+from codewarden.guardrails import (RULES, detect_injection, mask_pii, neutralize_injection, prepare_for_model,
+                                   redact_secrets_counted, sanitize_output, sensitive_path, unsafe_replacement)
 from codewarden.llm import LLMError, get_llm
 from codewarden.models import Finding
 from codewarden.qa import answer_question
@@ -30,6 +32,26 @@ from codewarden.testgen import generate_tests
 MAX_DIFF_BYTES = 2_000_000
 PR_URL_RE = re.compile(r"^https://github\.com/([\w.-]+)/([\w.-]+)/pull/(\d+)(?:[/?#].*)?$")
 PROVIDERS = ("rules", "gemini", "ollama")
+
+
+class PostingLimiter:
+    """Action guardrail: at most `limit` reviews posted to GitHub per hour."""
+
+    def __init__(self, limit: int = 10, window_s: int = 3600):
+        self.limit, self.window_s = limit, window_s
+        self._times: list[float] = []
+        self._lock = threading.Lock()
+
+    def check(self) -> None:
+        with self._lock:
+            now = time.time()
+            self._times = [t for t in self._times if now - t < self.window_s]
+            if len(self._times) >= self.limit:
+                raise UserError(f"Posting limit reached ({self.limit} reviews per hour). This protects repositories from floods; try again later.")
+
+    def record(self) -> None:
+        with self._lock:
+            self._times.append(time.time())
 
 
 class UserError(ValueError):
@@ -61,6 +83,7 @@ class Engine:
         self.repos = RepoManager(Path(repos_dir) if repos_dir else Path(".codewarden/repos"))
         self._lock = threading.Lock()
         self._exp_thread: threading.Thread | None = None
+        self.post_limiter = PostingLimiter(Config().post_limit_per_hour)
         store.fail_stale_experiments()
 
     def config(self, provider: str | None = None, model: str | None = None, rag: bool | None = None) -> Config:
@@ -217,7 +240,7 @@ class Engine:
                                 provider=provider, model=model, rag=rag, repo=f"{owner}/{repo}",
                                 pr_number=number, head_sha=pr["head_sha"], pr_body=pr["body"], root=root)
 
-    def post_to_github(self, review_id: int) -> dict:
+    def post_to_github(self, review_id: int, confirm: bool = False) -> dict:
         rv = self.store.get_review(review_id)
         if not rv:
             raise UserError("Review not found")
@@ -226,6 +249,9 @@ class Engine:
         token = os.environ.get("GITHUB_TOKEN", "")
         if not token:
             raise UserError("GITHUB_TOKEN is not set on the server, so posting is disabled.")
+        if not confirm:  # guardrail enforced here, not only in the browser
+            raise UserError("Posting needs explicit confirmation.")
+        self.post_limiter.check()
         names = {f.name for f in fields(Finding)}
         findings = [Finding(**{k: v for k, v in d.items() if k in names}) for d in rv["result"]["findings"]]
         if not findings:
@@ -237,8 +263,56 @@ class Engine:
             posted, moved = gh.post_review(rv["pr_number"], rv["head_sha"], render_summary(shell), findings)
         except GitHubError as exc:
             raise UserError(str(exc)) from exc
+        self.post_limiter.record()
         self.store.mark_posted(review_id)
         return {"posted": posted, "moved_to_summary": moved}
+
+    # ---- guardrails ------------------------------------------------------------------------
+    def guardrails_info(self) -> dict:
+        cfg = self.config()
+        return {"rules": RULES, "stats": self.store.guardrail_stats(),
+                "config": {"redact_secrets": cfg.redact_secrets, "mask_pii": cfg.mask_pii,
+                           "detect_injection": cfg.detect_injection, "sanitize_output": cfg.sanitize_output,
+                           "min_confidence": cfg.min_confidence, "min_severity": cfg.min_severity,
+                           "max_comments": cfg.max_comments, "post_limit_per_hour": cfg.post_limit_per_hour,
+                           "max_files": cfg.max_files}}
+
+    def guardrail_test(self, kind: str, text: str, path: str = "") -> dict:
+        """Run text through the real guardrail functions so the dashboard can show them working."""
+        text = text[:20_000]
+        events: list[dict] = []
+        add = lambda rule, action, detail: events.append({"rule": rule, "action": action, "detail": detail})
+        if kind == "path":
+            hit = sensitive_path(text.strip())
+            if hit:
+                add("sensitive_files", "skipped", f"matches {hit}: this file would never be sent to a model")
+            return {"processed": text.strip(), "events": events, "blocked": bool(hit)}
+        if kind == "replacement":
+            reason = unsafe_replacement(text)
+            if reason:
+                add("unsafe_suggestion", "removed", f"suggested fix {reason}")
+            return {"processed": "" if reason else text, "events": events, "blocked": bool(reason)}
+        if kind == "output":
+            clean, acts = sanitize_output(text)
+            for name, n in acts.items():
+                add("output_secret_scrub" if name == "secret scrubbed" else "output_sanitization", "sanitized", f"{n} {name}")
+            return {"processed": clean, "events": events, "blocked": False}
+        injection = detect_injection(text)
+        if injection:
+            add("injection_detection", "flagged", ", ".join(injection))
+        clean, evs = prepare_for_model(text, redact_secrets=True, pii=True, where="input")
+        for e in evs:
+            add(e.rule, e.action, e.detail)
+        clean, hits = neutralize_injection(clean)
+        if hits:
+            add("injection_detection", "neutralized", "instruction-like text replaced before it reaches a model")
+        return {"processed": clean, "events": events, "blocked": False}
+
+    def examples(self) -> dict:
+        path = (self.demo_dir.parent / "examples.json") if self.demo_dir else None
+        if path and path.exists():
+            return json.loads(path.read_text())
+        return {"repos": [], "questions": []}
 
     # ---- extras ----------------------------------------------------------------------------
     def tests_for(self, review_id: int, path: str, provider: str | None, model: str | None) -> dict:

@@ -1,0 +1,17 @@
+{
+  "repos": [
+    {"label": "agrima6/codewarden-demo-shop (your demo repo, 6 open PRs)", "url": "https://github.com/agrima6/codewarden-demo-shop"},
+    {"label": "pallets/itsdangerous (small Python library)", "url": "https://github.com/pallets/itsdangerous"},
+    {"label": "pallets/markupsafe (small Python library)", "url": "https://github.com/pallets/markupsafe"},
+    {"label": "octocat/Hello-World (tiny, for a quick connect)", "url": "https://github.com/octocat/Hello-World"}
+  ],
+  "questions": [
+    "What does this project do?",
+    "How is a user's login or identity checked?",
+    "Where does the code talk to the database?",
+    "How are secrets and configuration loaded?",
+    "Which functions handle file uploads or file paths?",
+    "What conventions should a new endpoint follow?",
+    "Where are errors handled or logged?"
+  ]
+}

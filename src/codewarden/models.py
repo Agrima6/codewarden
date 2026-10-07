@@ -67,6 +67,7 @@ class ReviewResult:
     context_used: dict[str, list[str]] = field(default_factory=dict)
     requests: int = 0
     duration_ms: int = 0
+    guardrails: list = field(default_factory=list)  # GuardEvent items, see guardrails.py
 
     def worst_severity(self) -> str | None:
         if not self.findings:

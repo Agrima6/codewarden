@@ -44,6 +44,15 @@ class ExperimentIn(BaseModel):
     repeats: int = Field(default=1, ge=1, le=5)
 
 
+class PostIn(BaseModel):
+    confirm: bool = False
+
+
+class GuardTestIn(BaseModel):
+    kind: str = Field(pattern="^(input|output|replacement|path)$")
+    text: str = Field(max_length=20000)
+
+
 class RepoIn(BaseModel):
     url: str = Field(max_length=300)
 
@@ -128,6 +137,22 @@ def create_app(engine: Engine, dashboard_token: str | None = None, allowed_hosts
     def stats():
         return engine.store.stats()
 
+    @app.get("/api/guardrails")
+    def guardrails():
+        return engine.guardrails_info()
+
+    @app.post("/api/guardrails/test")
+    def guardrails_test(body: GuardTestIn):
+        return engine.guardrail_test(body.kind, body.text)
+
+    @app.get("/api/examples")
+    def examples():
+        return engine.examples()
+
+    @app.get("/api/samples/{sample_id}")
+    def sample(sample_id: str):
+        return {"diff": engine.sample_diff(sample_id)}
+
     @app.get("/api/samples")
     def samples():
         return engine.samples()
@@ -161,8 +186,8 @@ def create_app(engine: Engine, dashboard_token: str | None = None, allowed_hosts
         return {"ok": True}
 
     @app.post("/api/reviews/{review_id}/post")
-    def post_review(review_id: int):
-        return engine.post_to_github(review_id)
+    def post_review(review_id: int, body: PostIn | None = None):
+        return engine.post_to_github(review_id, bool(body and body.confirm))
 
     @app.post("/api/reviews/{review_id}/tests")
     def make_tests(review_id: int, body: TestsIn):

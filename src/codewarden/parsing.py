@@ -32,23 +32,30 @@ def _single_line(value) -> str:
 
 
 def parse_findings(text: str) -> list[dict]:
-    """Turn raw model output into validated finding dicts. Never raises on bad model output."""
+    return parse_findings_ex(text)[0]
+
+
+def parse_findings_ex(text: str) -> tuple[list[dict], int]:
+    """Validated finding dicts plus the number of items rejected. Never raises on bad model output."""
     data = _extract_json(text)
     if isinstance(data, dict):
         data = data.get("findings", data.get("reviews"))
     if not isinstance(data, list):
-        return []
-    out = []
+        return [], 0
+    out, dropped = [], 0
     for item in data:
         if not isinstance(item, dict):
+            dropped += 1
             continue
         try:
             line = int(item.get("line", item.get("lineNumber")))
         except (TypeError, ValueError):
+            dropped += 1
             continue
         title = str(item.get("title") or "").strip()
         explanation = str(item.get("explanation") or item.get("reviewComment") or "").strip()
         if not (title or explanation) or line < 1:
+            dropped += 1
             continue
         try:
             confidence = min(1.0, max(0.0, float(item.get("confidence", 0.7))))
@@ -64,4 +71,4 @@ def parse_findings(text: str) -> list[dict]:
             "replacement": _single_line(item.get("replacement")),
             "confidence": confidence,
         })
-    return out
+    return out, dropped

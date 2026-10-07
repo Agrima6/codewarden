@@ -199,3 +199,10 @@ svg .val { fill: var(--text); font-size: 10.5px; font-family: var(--sans); font-
 svg .bar-p { fill: var(--accent); } svg .bar-r { fill: var(--ok); } svg .bar-f { fill: var(--med); }
 .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+
+/* guardrails */
+.flow { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+.flow-step { flex: 1; min-width: 150px; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--surface-2); color: var(--text); }
+.flow-step:hover { border-color: var(--accent); text-decoration: none; }
+.arrow { align-self: center; color: var(--faint); font-size: 18px; }
+mark { background: var(--med-soft); color: var(--med); padding: 0 3px; border-radius: 3px; font-weight: 600; }

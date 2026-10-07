@@ -83,8 +83,35 @@ Open `http://127.0.0.1:8765` and hard-refresh (Cmd+Shift+R) after any restart. O
 | **New review** | Review a pasted diff, a PR URL or a bundled sample | **Sample** tab: pick *Add checkout with coupons*, reviewer = offline baseline for an instant result, then repeat with a model. **GitHub PR** tab: paste any public PR URL. **Paste diff**: paste `git diff` output. Toggle "Use repository context" off and on to show the effect. |
 | **Review detail** (after any review) | The result | Findings sit on exact lines with severity, category, confidence and fix. Open **Repository context sent to the model** (the retrieved files). Click **Generate tests**. Use the severity chips to filter. **Copy summary** exports text. If a real PR was reviewed and a GitHub token is set, **Post to GitHub** publishes inline comments. |
 | **Experiment** | The research part | Read the research question and hypotheses; point at the dataset table. Show the stored run: tables with intervals, charts, "What the data shows", per-case matrix, **Failure analysis**, **Methodology and reproducibility** (hashes, models, command), download JSON/CSV. Finish on **Limitations**. |
+| **Guardrails** | Controls around the model, with a live tester | See the 2-minute script below. Message: "safe use of an LLM is designed in, not hoped for." |
 | **Ask the repo** | Retrieval-augmented Q&A | Choose your repo, ask "how do I check a user is logged in?" or "where are files saved?". The answer cites files; open a source to show the retrieved code. With the offline reviewer you see only the retrieved code. |
 | **Settings** | Configuration and status | Show which model backends are available, the retrieval settings (Chroma + LangChain chunking, top 4), whether a GitHub token / webhook is set. Message: "everything is configurable and nothing sensitive is displayed." |
+
+### Guardrails: 2-minute script
+
+Open **Guardrails**. Say: "A model reads untrusted code and writes text that gets published, so we put controls on all four sides of it."
+
+1. Point at the four boxes: **Input -> Model -> Output -> Action**. Each rule below shows what it does, whether it is on, how many times it has triggered across stored reviews, and the exact function that implements it.
+2. In **Try it**, tab *Before the model*, example **All three together**. Show: the password becomes `[REDACTED_SECRET]`, the email becomes `[EMAIL]`, the injected instruction is neutralised, and the event log says what happened. "That is what the model would actually receive."
+3. Tab *Model output*, example **Ping and tracking image**. Show the @mention neutralised and the image and link removed. "A model cannot ping people or leak data through a markdown image."
+4. Tab *Suggested fix*, example **Turns TLS verification off**. Show **Blocked**. "A one-click fix that makes code less secure is never offered."
+5. Tab *File path*, `.env` -> blocked; `.env.example` -> allowed. "Sensitive files are never sent."
+6. Open any review (for example *Add checkout with coupons*): the **Guardrails** panel at the top lists what triggered on that review, where, and which checks ran.
+7. Close with the action layer: comment-only (it can never approve or merge), the server refuses to post without confirmation, and posting is rate limited.
+
+Be candid about limits (the page says it too): these are pattern-based, so novel secrets or phrasing can slip through, and a model can still be wrong. That is why a human makes the final decision.
+
+### Sample dropdowns (for a smooth demo)
+
+| Page | Dropdown | What it does |
+|---|---|---|
+| New review -> Paste diff | *Load an example diff* | Fills the box with a sample or seeded-bug diff |
+| New review -> GitHub PR | *Connected repository* then *Pull request* | Lists the repo's real PRs and fills the URL |
+| New review -> Sample | *Bundled sample* | Runs a prepared pull request |
+| Repositories | *Example repositories* | Fills the URL box (edit the list in `demo/examples.json`) |
+| Ask the repo | *Try a sample question* | Fills in and runs a question (edit in `demo/examples.json`) |
+| Experiment | *Preset* | Sets reviewers and repetitions for common runs |
+| Guardrails | *Example* | Loads a ready-made input for each tab |
 
 ### Optional: post real review comments on your GitHub PRs
 

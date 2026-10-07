@@ -20,7 +20,7 @@ PR opened/updated -> GitHub Action / webhook / dashboard -> fetch diff -> parse 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[web,langchain,dev]"
-pytest -q                 # 93 tests
+pytest -q                 # 143 tests
 codewarden demo           # dashboard at http://127.0.0.1:8765 with demo PRs pre-reviewed
 ```
 
@@ -41,7 +41,7 @@ A step-by-step presentation script is in [docs/DEMO.md](docs/DEMO.md).
 | One-line auto-fix suggestions (posted as GitHub `suggestion` blocks) | `replacement` field in findings |
 | Unit-test generation for changed code | dashboard **Generate tests**, `codewarden testgen` |
 | Quick precision/recall check on the seeded-bug cases | `codewarden eval` |
-| Secret redaction, prompt-injection defence, dedupe across pushes | `redact.py`, `prompts.py`, `report.py` |
+| Guardrails on input, model, output and action; dedupe across pushes | `guardrails.py`, `prompts.py`, `report.py` |
 
 ## Models
 
@@ -149,7 +149,20 @@ Environment overrides: `CODEWARDEN_PROVIDER`, `CODEWARDEN_MODEL`, `CODEWARDEN_EX
 | Models | Gemini only | Gemini, local Ollama models, offline baseline |
 | Visibility | Actions log | dashboard with history, stats and annotated diffs |
 | Quality measurement | none | seeded-bug evaluation harness |
-| Tests | none | 93 offline tests |
+| Tests | none | 143 offline tests |
+
+## Guardrails
+
+Controls on all four sides of the model, each visible in the dashboard (**Guardrails** page, plus a per-review panel):
+
+| Layer | Rules |
+|---|---|
+| **Input** | sensitive files (`.env`, keys, tfstate...) never sent; secret redaction; PII masking (email, phone, Luhn-checked cards, Aadhaar-style IDs); prompt-injection detection (flagged in changed lines and turned into a finding, neutralised in PR text and retrieved code); "untrusted data" system prompt |
+| **Model** | output schema validation; findings must be grounded in a changed line; confidence/severity thresholds; comment cap and cross-push dedupe |
+| **Output** | @mention, link, image and HTML stripping; length limits; secret scrub on model text; unsafe one-click fixes blocked (shell pipes, `eval`, TLS off, `chmod 777`, hard-coded credentials) |
+| **Action** | comment-only reviews (never approve or merge); posting needs server-side confirmation; posting rate limit |
+
+Every trigger is stored as an event with the review it belongs to. `POST /api/guardrails/test` runs text through the real functions, which powers the dashboard's live tester. Switches live in `.codewarden.yml` (`redact_secrets`, `mask_pii`, `detect_injection`, `sanitize_output`, `post_limit_per_hour`). Implementation: `src/codewarden/guardrails.py`, wired in `review.py`, `filters.py`, `services.py` and `github.py`. Detection is pattern-based, so it reduces risk without eliminating it.
 
 ## Experiment
 
@@ -173,7 +186,7 @@ The datasets are small and were written by the same team as the baseline, so tre
 
 ## Status
 
-**Verified** (93 offline tests with HTTP mocked, run on Python 3.14): diff parser, pipeline, filters, dedupe, redaction, retry logic, BM25 retrieval, LangChain chunker and retriever adapter, request/response shapes for Gemini and Ollama, CLI, Action flow, GitHub posting logic, the dashboard API (auth, validation, webhook signatures, storage), and the web UI in a real browser (desktop, mobile, dark mode) using the offline provider.
+**Verified** (143 offline tests with HTTP mocked, run on Python 3.14): diff parser, pipeline, filters, dedupe, redaction, retry logic, BM25 retrieval, LangChain chunker and retriever adapter, request/response shapes for Gemini and Ollama, CLI, Action flow, GitHub posting logic, the dashboard API (auth, validation, webhook signatures, storage), and the web UI in a real browser (desktop, mobile, dark mode) using the offline provider.
 
 **Run for real on this machine:** Gemini (live API), Ollama with Qwen2.5-Coder, ChromaDB with LangChain chunking, and cloning/indexing public GitHub repositories. **Not verified:** posting reviews to the real GitHub API, the Docker image (no Docker daemon was running), Python 3.10/3.12 (CI is configured for them). Do a first run on a throwaway repository before relying on it.
 
