@@ -44,7 +44,7 @@ class GeminiLLM:
             "contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {
                 "temperature": self.temperature,
-                "responseMimeType": "application/json",
+                **({"responseMimeType": "application/json"} if "[task:qa]" not in system else {}),
                 "maxOutputTokens": 4096,
             },
         }

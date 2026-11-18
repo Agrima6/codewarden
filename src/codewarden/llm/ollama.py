@@ -19,7 +19,7 @@ class OllamaLLM:
         payload = {
             "model": self.model,
             "stream": False,
-            "format": "json",
+            **({"format": "json"} if "[task:qa]" not in system else {}),  # Q&A answers are prose, reviews are JSON
             "options": {"temperature": self.temperature},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }

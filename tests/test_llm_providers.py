@@ -93,3 +93,24 @@ def test_gemini_does_not_fall_back_on_auth_errors(monkeypatch):
     with pytest.raises(LLMError):
         GeminiLLM("a", api_key="k", fallbacks=("b",)).complete("s", "u")
     assert len(calls) == 1
+
+
+def test_qa_requests_are_plain_text_but_reviews_stay_json(monkeypatch):
+    from codewarden.qa import QA_SYSTEM
+    from codewarden.prompts import SYSTEM_PROMPT
+    seen = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        seen.append(json)
+        if "generateContent" in url:
+            return _ok({"candidates": [{"content": {"parts": [{"text": "answer"}]}}]})
+        return _ok({"message": {"content": "answer"}})
+
+    monkeypatch.setattr("codewarden.llm.base.requests.post", fake_post)
+    for llm in (GeminiLLM("m", api_key="k"), OllamaLLM("m")):
+        seen.clear()
+        llm.complete(QA_SYSTEM, "q")
+        llm.complete(SYSTEM_PROMPT, "diff")
+        qa, review = seen
+        assert "format" not in qa and "responseMimeType" not in qa.get("generationConfig", {})
+        assert review.get("format") == "json" or review["generationConfig"]["responseMimeType"] == "application/json"
