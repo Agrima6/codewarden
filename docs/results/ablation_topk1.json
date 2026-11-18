@@ -1,0 +1,266 @@
+{
+  "systems": [
+    {
+      "id": "ollama-rag",
+      "label": "Ollama (qwen2.5-coder:7b) + RAG",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:7b",
+      "rag": true
+    }
+  ],
+  "suites": {
+    "general": {
+      "description": "Bugs visible in the diff alone",
+      "cases": 12,
+      "bugs": 10,
+      "clean": 2,
+      "repo": null
+    },
+    "context": {
+      "description": "Bugs that depend on repository conventions and helper signatures",
+      "cases": 7,
+      "bugs": 6,
+      "clean": 1,
+      "repo": "shop"
+    }
+  },
+  "metrics": {
+    "ollama-rag|context": {
+      "repeats": 3,
+      "cases": 21,
+      "expected": 18,
+      "matched": 13,
+      "findings": 17,
+      "true_positives": 13,
+      "false_positives": 4,
+      "false_negatives": 5,
+      "precision": 0.7647058823529411,
+      "recall": 0.7222222222222222,
+      "f1": 0.7428571428571428,
+      "precision_ci": [
+        0.36769723933192805,
+        0.9478176810180832
+      ],
+      "recall_ci": [
+        0.3425051131829763,
+        0.9284535385267726
+      ],
+      "clean_cases": 3,
+      "clean_false_alarms": 3,
+      "clean_false_alarm_rate": 1.0,
+      "run_to_run": {
+        "precision": [
+          0.7666666666666667,
+          0.07200822998230959
+        ],
+        "recall": [
+          0.7222222222222222,
+          0.07856742013183865
+        ],
+        "f1": [
+          0.7424242424242424,
+          0.06887970554033264
+        ]
+      },
+      "by_category": {
+        "bug": {
+          "found": 6,
+          "total": 9,
+          "recall": 0.6666666666666666
+        },
+        "maintainability": {
+          "found": 3,
+          "total": 3,
+          "recall": 1.0
+        },
+        "security": {
+          "found": 4,
+          "total": 6,
+          "recall": 0.6666666666666666
+        }
+      },
+      "avg_latency_ms": 30153,
+      "requests": 21,
+      "tokens_prompt": 15168,
+      "tokens_output": 1437
+    }
+  },
+  "cases": [
+    {
+      "suite": "context",
+      "case": "bypasses_db_helper",
+      "expected": "app/reports.py:8 (maintainability)",
+      "clean": false,
+      "systems": {
+        "ollama-rag": {
+          "found_in": 3,
+          "false_alarm_runs": 0,
+          "runs": 3,
+          "findings": [
+            "app/reports.py:8 [high] SQL Injection"
+          ]
+        }
+      }
+    },
+    {
+      "suite": "context",
+      "case": "correct_usage_clean",
+      "expected": "clean: no issue planted",
+      "clean": true,
+      "systems": {
+        "ollama-rag": {
+          "found_in": 0,
+          "false_alarm_runs": 3,
+          "runs": 3,
+          "findings": [
+            "app/shipping.py:7 [high] SQL Injection",
+            "app/shipping.py:8 [high] Potential IndexError"
+          ]
+        }
+      }
+    },
+    {
+      "suite": "context",
+      "case": "missing_login_check",
+      "expected": "app/invoices.py:4 (security)",
+      "clean": false,
+      "systems": {
+        "ollama-rag": {
+          "found_in": 3,
+          "false_alarm_runs": 0,
+          "runs": 3,
+          "findings": [
+            "app/invoices.py:5 [medium] Potential off-by-one error",
+            "app/invoices.py:5 [high] SQL Injection",
+            "app/invoices.py:5 [high] Potential SQL Injection"
+          ]
+        }
+      }
+    },
+    {
+      "suite": "context",
+      "case": "nonexistent_helper",
+      "expected": "app/profile.py:1 (bug)",
+      "clean": false,
+      "systems": {
+        "ollama-rag": {
+          "found_in": 0,
+          "false_alarm_runs": 0,
+          "runs": 3,
+          "findings": []
+        }
+      }
+    },
+    {
+      "suite": "context",
+      "case": "unsanitized_filename",
+      "expected": "app/avatars.py:10 (security)",
+      "clean": false,
+      "systems": {
+        "ollama-rag": {
+          "found_in": 1,
+          "false_alarm_runs": 0,
+          "runs": 3,
+          "findings": [
+            "app/avatars.py:10 [high] Path Traversal Vulnerability"
+          ]
+        }
+      }
+    },
+    {
+      "suite": "context",
+      "case": "wrong_params_type",
+      "expected": "app/refunds.py:7 (bug)",
+      "clean": false,
+      "systems": {
+        "ollama-rag": {
+          "found_in": 3,
+          "false_alarm_runs": 0,
+          "runs": 3,
+          "findings": [
+            "app/refunds.py:7 [high] SQL Injection"
+          ]
+        }
+      }
+    },
+    {
+      "suite": "context",
+      "case": "wrong_secret_signature",
+      "expected": "app/webhooks.py:8 (bug)",
+      "clean": false,
+      "systems": {
+        "ollama-rag": {
+          "found_in": 3,
+          "false_alarm_runs": 0,
+          "runs": 3,
+          "findings": [
+            "app/webhooks.py:8 [medium] Default secret handling",
+            "app/webhooks.py:8 [high] Hard-coded default secret",
+            "app/webhooks.py:8 [high] Default secret usage"
+          ]
+        }
+      }
+    }
+  ],
+  "failures": [
+    {
+      "kind": "false_alarm",
+      "suite": "context",
+      "case": "correct_usage_clean",
+      "system": "ollama-rag",
+      "detail": "extra findings in 3/3 runs",
+      "reported": [
+        "app/shipping.py:7 [high] SQL Injection",
+        "app/shipping.py:8 [high] Potential IndexError"
+      ]
+    },
+    {
+      "kind": "missed",
+      "suite": "context",
+      "case": "nonexistent_helper",
+      "system": "ollama-rag",
+      "detail": "found in 0/3 runs. Expected app/profile.py:1 (bug)",
+      "reported": []
+    },
+    {
+      "kind": "missed",
+      "suite": "context",
+      "case": "unsanitized_filename",
+      "system": "ollama-rag",
+      "detail": "found in 1/3 runs. Expected app/avatars.py:10 (security)",
+      "reported": [
+        "app/avatars.py:10 [high] Path Traversal Vulnerability"
+      ]
+    }
+  ],
+  "config": {
+    "repeats": 3,
+    "temperature": 0.2,
+    "min_confidence": 0.5,
+    "line_tolerance": 2,
+    "redact_secrets": true,
+    "ci_method": "per-case",
+    "rag": {
+      "backend": "chroma",
+      "chunker": "langchain",
+      "top_k": 1
+    },
+    "models_that_answered": {
+      "ollama-rag": [
+        "qwen2.5-coder:7b"
+      ]
+    },
+    "prompt_hash": "1d2b601c96fd",
+    "dataset_hash": "b3533d6a5b2a",
+    "codewarden_version": "0.1.0",
+    "git_commit": "350392c",
+    "python": "3.14.8",
+    "duration_s": 637.3,
+    "command": "codewarden experiment --providers ollama --repeats 3",
+    "ablation": {
+      "name": "topk1",
+      "backend": "chroma",
+      "top_k": 1
+    }
+  }
+}

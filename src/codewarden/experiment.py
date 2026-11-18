@@ -177,7 +177,8 @@ def _agg(per_repeat: list[dict]) -> dict:
 
 
 def run_experiment(*, systems: list[System], repeats: int, eval_dir: Path, base_cfg: Config,
-                   progress: Progress | None = None, project_root: Path | None = None) -> dict:
+                   progress: Progress | None = None, project_root: Path | None = None,
+                   only_suites: tuple[str, ...] | None = None) -> dict:
     """Run every system on every applicable suite. Raises ExperimentError on any provider failure:
     a partial or silently-empty result would be misleading, so nothing is returned in that case."""
     if repeats < 1 or repeats > 10:
@@ -194,9 +195,8 @@ def run_experiment(*, systems: list[System], repeats: int, eval_dir: Path, base_
 
     def plan_for(system: System) -> list[str]:
         # Retrieval only matters where the repository is known, so the general suite runs once, diff-only.
-        if system.rag:
-            return [k for k in suites if suites[k]["repo"]]
-        return list(suites)
+        keys = [k for k in suites if suites[k]["repo"]] if system.rag else list(suites)
+        return [k for k in keys if only_suites is None or k in only_suites]
 
     total = repeats * sum(len(suites[k]["cases"]) for sy in systems for k in plan_for(sy))
     done = 0

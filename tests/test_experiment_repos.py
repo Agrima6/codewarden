@@ -202,3 +202,8 @@ def test_old_stored_results_get_corrected_intervals():
     lo, hi = fixed["metrics"]["x|general"]["recall_ci"]
     assert (lo, hi) == effective_wilson(18, 30, 3) and hi - lo > wilson(18, 30)[1] - wilson(18, 30)[0]
     assert refresh_intervals(fixed) is fixed
+
+
+def test_experiment_can_be_limited_to_one_suite():
+    res = run_experiment(systems=build_systems(["rules"]), repeats=1, eval_dir=EVAL, base_cfg=Config(), only_suites=("context",))
+    assert set(res["metrics"]) == {"rules|context"}
