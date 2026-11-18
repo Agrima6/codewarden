@@ -11,8 +11,7 @@
 
 \title{CodeWarden: Retrieval-Augmented Local LLM Pull Request Review with Layered Guardrails, Evaluated Against Rule-Based Baselines}
 
-% TODO: replace with your group number, names and roll numbers.
-\author{Group XX: Name1 (Roll No.), Name2 (Roll No.), Name3 (Roll No.), Naveen Singh/Kiran Khatter\\
+\author{Group 01: Agrima Agarwal (230639), Aaradhya Gupta (230644), Naveen Singh/Kiran Khatter\\
 School of Engineering \& Technology, BML Munjal University}
 \maketitle
 
@@ -24,8 +23,7 @@ Code review is slow, and good reviewers need knowledge of the whole repository, 
 code review, guardrails, large language models, pull requests, retrieval-augmented generation
 \end{IEEEkeywords}
 
-% TODO: paste your real Overleaf project link and Git repository link.
-\noindent\textbf{Overleaf Project Link:} \url{https://www.overleaf.com/project/...}
+\noindent\textbf{Overleaf Project Link:} \url{https://www.overleaf.com/project/6afdca7574f49166a7984460}
 
 \noindent\textbf{Git Repository:} \url{https://github.com/Agrima6/codewarden}
 
@@ -294,7 +292,7 @@ Repeated runs of the same file are not independent evidence, so the 95\% Wilson 
 where $\hat p$ is the fraction of bugs found, $n$ is the number of distinct bugs (10 for Suite A, 6 for Suite B), and $z=1.96$.
 
 \subsection{Environment and Parameters}
-All runs used one Apple M2 laptop with 16~GB of memory, Python 3.14.8, Ollama 0.40.0 serving \texttt{qwen2.5-coder:7b} (7.6 billion parameters, Q4\_K\_M quantisation), ChromaDB 1.5.9 with its default MiniLM sentence-embedding model, and langchain-text-splitters 1.1.3. The main experiment ran on software commit \texttt{18fc751}, and the later ablation runs on commit \texttt{350392c}, which added the guardrails described above. The prompt and the benchmark were identical (hash \texttt{1d2b601c96fd} and \texttt{b3533d6a5b2a}). Table~\ref{tab:params} lists every setting.
+All runs used one Apple M2 laptop with 16~GB of memory, Python 3.14.8, Ollama 0.40.0 serving \texttt{qwen2.5-coder:7b} (7.6 billion parameters, Q4\_K\_M quantisation), ChromaDB 1.5.9 with its default MiniLM sentence-embedding model, and langchain-text-splitters 1.1.3. The main experiment (batch A) ran in a process started from commit \texttt{8c5d1b2}, before the guardrails of Section~\ref{sec:method} existed, so it used secret redaction only; its result file lists commit \texttt{18fc751}, the repository head when the run finished. The later ablation runs (batch B) used commit \texttt{350392c}, which includes all fifteen guardrails. The prompt and the benchmark were identical (hash \texttt{1d2b601c96fd} and \texttt{b3533d6a5b2a}). Table~\ref{tab:params} lists every setting.
 
 \begin{table}[!t]
 \caption{Settings used in all experiments.}\label{tab:params}
@@ -426,7 +424,7 @@ Table~\ref{tab:perbug} also supports the ablation conclusion: removing retrieval
 
 \textbf{Why the model was better and worse.} Compared with patterns, the model reads intent and can flag a missing authorisation check or a leaked file handle, but it also shows pattern bias, calling safe database code unsafe, and it cannot reason well about concurrency. In practice this means the tool is useful as a first-pass assistant whose comments a developer reads critically; a false alarm costs seconds, while a missed race condition still needs a human. Local running costs time (about 20~s per file here), which is acceptable for pull requests but not for every keystroke. The guardrails add a safety margin in a setting where the input is attacker-controlled, but they are pattern-based and reduce risk without removing it.
 
-\textbf{Limitations and threats to validity.} The benchmark is small and written by the authors: 16 planted bugs give wide intervals, planted bugs are tidier than real ones, and the baseline rules were written by the same team that wrote the cases, so the baseline is not independently tuned. The retrieval corpus has only seven chunks, so retrieval here approximates ``show the model the whole project'' and tells little about large repositories, where selecting the right chunk is harder. Batches A and B ran on different software commits and under different machine load, which confounds the precision comparison, and no random seed was fixed. Latency in batch B was measured while other programs were running and is therefore not reported. Results come from one local model on one laptop and mostly Python; hosted or larger models, other languages and real developer-written bugs may behave differently. Matching within two lines can credit a finding that is correct for a neighbouring defect, and a correct finding about an unplanted real bug counts as a false positive. Construct validity is limited because a planted bug is only a proxy for a defect developers care about. Implementation errors are mitigated by 147 automated tests but not excluded. Ethically, local execution keeps code private, the tool never approves or merges by itself, and the risk of automation bias, where reviewers trust the tool too much, remains. No personal data from human subjects was collected.
+\textbf{Limitations and threats to validity.} The benchmark is small and written by the authors: 16 planted bugs give wide intervals, planted bugs are tidier than real ones, and the baseline rules were written by the same team that wrote the cases, so the baseline is not independently tuned. The retrieval corpus has only seven chunks, so retrieval here approximates ``show the model the whole project'' and tells little about large repositories, where selecting the right chunk is harder. Batch A ran without the guardrails and batches A and B ran under different machine load, which confounds the precision comparison, and no random seed was fixed. Latency in batch B was measured while other programs were running and is therefore not reported. Results come from one local model on one laptop and mostly Python; hosted or larger models, other languages and real developer-written bugs may behave differently. Matching within two lines can credit a finding that is correct for a neighbouring defect, and a correct finding about an unplanted real bug counts as a false positive. Construct validity is limited because a planted bug is only a proxy for a defect developers care about. Implementation errors are mitigated by 147 automated tests but not excluded. Ethically, local execution keeps code private, the tool never approves or merges by itself, and the risk of automation bias, where reviewers trust the tool too much, remains. No personal data from human subjects was collected.
 
 \section{Conclusion and Future Work}\label{sec:conclusion}
 RQ1: in our benchmark a local 7.6-billion-parameter model found more known bugs than a rule-based baseline, with recall $0.833\pm0.047$ against $0.600\pm0.000$ on diff-visible bugs, although the intervals overlap and the model needs about 21.7~s per file. RQ2: retrieving repository code raised recall on convention-dependent bugs from $0.500\pm0.136$ to $0.722\pm0.079$ in the main run and to 0.722--0.778 in four further settings, but the precision improvement of the main run did not replicate, so its effect on false alarms is undecided.
@@ -434,13 +432,11 @@ RQ1: in our benchmark a local 7.6-billion-parameter model found more known bugs 
 A further result is practical: the whole pipeline, including the guardrails, runs on a laptop and is reproduced by one command, and a failed model call aborts an experiment instead of being recorded as an empty result. Three directions follow. First, replicate the experiments on a larger benchmark built from real pull-request defects, with a repository large enough to make retrieval selective, a fixed random seed and, ideally, an independently written baseline. Second, add symbol-aware retrieval, such as import and signature lookup, to catch references to code that does not exist, and compare local models of several sizes with hosted ones. Third, run a study with human reviewers to measure whether the comments change real review outcomes.
 
 \section*{AI-Use Declaration}
-AI assistance was used in this project. The CodeWarden software, the evaluation scripts, the plotting code of the figures and a first draft of this paper were produced with the help of an AI assistant (Claude, through Claude Code, by Anthropic). The experiments were run on a team member's laptop through that assistant, and all numbers in this paper come from the saved result files in the project repository. The language model that is evaluated in the paper (Qwen2.5-Coder) is the subject of the study, not an author. % TODO: edit this paragraph so that it states exactly what each member wrote, checked and changed, and keep it truthful.
+AI assistance was used in this project. The CodeWarden software, the evaluation scripts, the plotting code of the figures and a first draft of this paper were produced with the help of an AI assistant (Claude, through Claude Code, by Anthropic). The experiments were run on a team member's laptop through that assistant, and all numbers in this paper come from the saved result files in the project repository. The language model that is evaluated in the paper (Qwen2.5-Coder) is the subject of the study, not an author.
 
 \section*{Author Contributions}
-% TODO: replace each line with a true one-line statement for that member.
-Name1 (Roll No.): [one-line contribution, for example system design and implementation].\\
-Name2 (Roll No.): [one-line contribution, for example benchmark design and experiments].\\
-Name3 (Roll No.): [one-line contribution, for example literature review and writing].
+Agrima Agarwal (230639): defined the research questions and requirements, directed the design and implementation of the CodeWarden review pipeline, retrieval, guardrails and dashboard, ran the experiments on her laptop, created the GitHub repository and the Overleaf project, and compiled the paper.\\
+Aaradhya Gupta (230644): reviewed the benchmark cases and results, checked the references against the original sources, and revised the text of the paper. % CONFIRM: must describe what this member actually did
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
